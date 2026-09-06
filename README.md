@@ -12,6 +12,6 @@
 ## 👨‍💻 作者与课程信息
 
 - **学校**：广东工业大学（GDUT）
-- **专业班级**：计算机科学与技术 24 5班
+- **专业班级**：24 计科 6班
 - **博客园主页**：[点击访问我的博客园主页](https://www.cnblogs.com/IntZhx2)
 - **班级课程链接**：[Class56-Grade2024-CS](https://edu.cnblogs.com/campus/gdgy/Class56-Grade2024-CS/)

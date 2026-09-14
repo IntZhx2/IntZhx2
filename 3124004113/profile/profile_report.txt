@@ -1,0 +1,69 @@
+======================================================================
+广东工业大学 2026 软件工程个人项目：论文查重 CPU 性能分析报告
+学号：3124004113 | 姓名：IntZhx2 | 运行环境：Python 3.9
+======================================================================
+
+【一、按累计耗时 (cumtime) 排序 Top 15 函数】
+Mon Sep 14 11:21:45 2026    /Users/intz/Downloads/测试文本/IntZhx2/3124004113/profile/simhash_profile.prof
+
+         60037 function calls (60024 primitive calls) in 0.372 seconds
+
+   Ordered by: cumulative time
+   List reduced from 105 to 15 due to restriction <15>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.372    0.372 {built-in method builtins.exec}
+        1    0.000    0.000    0.372    0.372 <string>:1(<module>)
+        1    0.008    0.008    0.372    0.372 benchmark_profile.py:28(run_benchmark)
+        1    0.004    0.004    0.206    0.206 similarity_checker.py:79(calculate_similarity)
+        2    0.000    0.000    0.146    0.073 text_processor.py:55(normalize)
+        2    0.101    0.050    0.106    0.053 similarity_checker.py:32(compute_simhash)
+        2    0.098    0.049    0.098    0.049 {built-in method unicodedata.normalize}
+        2    0.000    0.000    0.094    0.047 similarity_checker.py:17(extract_ngrams)
+        2    0.064    0.032    0.064    0.032 similarity_checker.py:29(<listcomp>)
+        2    0.000    0.000    0.041    0.020 re.py:233(findall)
+        2    0.039    0.020    0.039    0.020 {method 'findall' of 're.Pattern' objects}
+        2    0.000    0.000    0.030    0.015 __init__.py:581(__init__)
+        2    0.000    0.000    0.030    0.015 __init__.py:649(update)
+        2    0.028    0.014    0.028    0.014 {built-in method _collections._count_elements}
+        1    0.010    0.010    0.012    0.012 benchmark_profile.py:18(generate_large_text)
+
+
+
+----------------------------------------------------------------------
+
+【二、按函数自身净耗时 (tottime) 排序 Top 15 函数】
+Mon Sep 14 11:21:45 2026    /Users/intz/Downloads/测试文本/IntZhx2/3124004113/profile/simhash_profile.prof
+
+         60037 function calls (60024 primitive calls) in 0.372 seconds
+
+   Ordered by: internal time
+   List reduced from 105 to 15 due to restriction <15>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        2    0.101    0.050    0.106    0.053 similarity_checker.py:32(compute_simhash)
+        2    0.098    0.049    0.098    0.049 {built-in method unicodedata.normalize}
+        2    0.064    0.032    0.064    0.032 similarity_checker.py:29(<listcomp>)
+        2    0.039    0.020    0.039    0.020 {method 'findall' of 're.Pattern' objects}
+        2    0.028    0.014    0.028    0.014 {built-in method _collections._count_elements}
+        1    0.010    0.010    0.012    0.012 benchmark_profile.py:18(generate_large_text)
+        1    0.008    0.008    0.372    0.372 benchmark_profile.py:28(run_benchmark)
+        3    0.006    0.002    0.006    0.002 {method 'join' of 'str' objects}
+        1    0.004    0.004    0.206    0.206 similarity_checker.py:79(calculate_similarity)
+    13540    0.003    0.000    0.003    0.000 {method 'hexdigest' of '_hashlib.HASH' objects}
+        2    0.003    0.001    0.003    0.001 {method 'lower' of 'str' objects}
+      7/1    0.002    0.000    0.002    0.002 {built-in method _abc._abc_subclasscheck}
+        2    0.001    0.001    0.001    0.001 sre_compile.py:276(_optimize_charset)
+    13540    0.001    0.000    0.001    0.000 {built-in method _hashlib.openssl_md5}
+    13540    0.001    0.000    0.001    0.000 {method 'encode' of 'str' objects}
+
+
+
+======================================================================
+【三、性能瓶颈分析与优化总结】
+1. 核心瓶颈：在超大规模文本（37 万字符）下，主要耗时集中于 compute_simhash 的循环特征哈希与 unicodedata.normalize 归一化。
+2. 优化方案：
+   - 优化点 A：对余弦相似度采用特征集合交集 (c1.keys() & c2.keys()) 过滤，避免全量向量遍历，直接将向量点积计算复杂度降为 O(|交集|)。
+   - 优化点 B：采用 2-gram 滑动切片复用，单次列表推导式直接构建 Counter，借助 C 扩展 _collections._count_elements 实现高效统计。
+   - 优化点 C：对完全相同文本及空文本提供 O(1) 短路保护分支，大幅减少不必要的特征抽取开销。
+3. 压测表现：单次约 37 万字大文本端到端处理仅耗时 0.37 秒，远低于课程要求的 5 秒限制。

@@ -210,31 +210,53 @@ def test_20_cli_wrong_arg_count(self):
 在终端执行 `python3 -m unittest discover -s tests -p "test_*.py" -v`，全部 22 项测试均一次性通过：
 
 ```text
-test_01_identical_text (test_checker.TestPlagiarismChecker) ... ok
-test_02_completely_different (test_checker.TestPlagiarismChecker) ... ok
-test_03_both_empty (test_checker.TestPlagiarismChecker) ... ok
-test_04_one_empty_orig (test_checker.TestPlagiarismChecker) ... ok
-test_05_one_empty_suspect (test_checker.TestPlagiarismChecker) ... ok
-test_06_punctuation_only (test_checker.TestPlagiarismChecker) ... ok
-test_07_whitespace_and_newlines (test_checker.TestPlagiarismChecker) ... ok
-test_08_fullwidth_halfwidth (test_checker.TestPlagiarismChecker) ... ok
-test_09_case_insensitivity (test_checker.TestPlagiarismChecker) ... ok
-test_10_short_text_fallback (test_checker.TestPlagiarismChecker) ... ok
-test_11_sample_orig_add (test_checker.TestPlagiarismChecker) ... ok
-test_12_sample_orig_del (test_checker.TestPlagiarismChecker) ... ok
-test_13_sample_orig_dis_1 (test_checker.TestPlagiarismChecker) ... ok
-test_14_sample_orig_dis_10 (test_checker.TestPlagiarismChecker) ... ok
-test_15_sample_orig_dis_15 (test_checker.TestPlagiarismChecker) ... ok
-test_16_utf8_bom_handling (test_checker.TestPlagiarismChecker) ... ok
-test_17_gbk_encoding (test_checker.TestPlagiarismChecker) ... ok
-test_18_simhash_deterministic (test_checker.TestPlagiarismChecker) ... ok
-test_19_cli_correct_usage (test_checker.TestPlagiarismChecker) ... ok
-test_20_cli_wrong_arg_count (test_checker.TestPlagiarismChecker) ... ok
-test_21_cli_file_not_found (test_checker.TestPlagiarismChecker) ... ok
-test_22_cli_directory_input_error (test_checker.TestPlagiarismChecker) ... ok
+test_01_identical_text (test_checker.TestPlagiarismChecker)
+测试完全相同的文本返回 1.00 ... ok
+test_02_completely_different (test_checker.TestPlagiarismChecker)
+测试完全不相干的文本返回接近 0.00 ... ok
+test_03_both_empty (test_checker.TestPlagiarismChecker)
+测试双方均为空文本时返回 1.00 ... ok
+test_04_one_empty_orig (test_checker.TestPlagiarismChecker)
+测试原文为空时返回 0.00 ... ok
+test_05_one_empty_suspect (test_checker.TestPlagiarismChecker)
+测试抄袭文本为空时返回 0.00 ... ok
+test_06_punctuation_only (test_checker.TestPlagiarismChecker)
+测试纯标点符号清洗后视为空文本 ... ok
+test_07_whitespace_and_newlines (test_checker.TestPlagiarismChecker)
+测试空格与换行不影响查重结果 ... ok
+test_08_fullwidth_halfwidth (test_checker.TestPlagiarismChecker)
+测试全角与半角字符归一化 ... ok
+test_09_case_insensitivity (test_checker.TestPlagiarismChecker)
+测试英文字母大小写无关性 ... ok
+test_10_short_text_fallback (test_checker.TestPlagiarismChecker)
+测试超短文本（少于 2 个字符）能平滑回退 ... ok
+test_11_sample_orig_add (test_checker.TestPlagiarismChecker)
+测试官方增字样本 orig_0.8_add.txt ... ok
+test_12_sample_orig_del (test_checker.TestPlagiarismChecker)
+测试官方删字样本 orig_0.8_del.txt ... ok
+test_13_sample_orig_dis_1 (test_checker.TestPlagiarismChecker)
+测试官方距离-1 样本 orig_0.8_dis_1.txt ... ok
+test_14_sample_orig_dis_10 (test_checker.TestPlagiarismChecker)
+测试官方距离-10 样本 orig_0.8_dis_10.txt ... ok
+test_15_sample_orig_dis_15 (test_checker.TestPlagiarismChecker)
+测试官方距离-15 样本 orig_0.8_dis_15.txt ... ok
+test_16_utf8_bom_handling (test_checker.TestPlagiarismChecker)
+测试 UTF-8 带 BOM 文件读取 ... ok
+test_17_gbk_encoding (test_checker.TestPlagiarismChecker)
+测试 GBK 编码文件读取 ... ok
+test_18_simhash_deterministic (test_checker.TestPlagiarismChecker)
+测试算法计算的完全确定性 ... ok
+test_19_cli_correct_usage (test_checker.TestPlagiarismChecker)
+测试命令行端到端调用：成功返回 0，答案精确写入两位小数 ... ok
+test_20_cli_wrong_arg_count (test_checker.TestPlagiarismChecker)
+测试命令行参数不足时退出码为 2 并打印提示 ... ok
+test_21_cli_file_not_found (test_checker.TestPlagiarismChecker)
+测试输入文件不存在时退出码为 1 ... ok
+test_22_cli_directory_input_error (test_checker.TestPlagiarismChecker)
+测试输入路径为目录时退出码为 1 ... ok
 
 ----------------------------------------------------------------------
-Ran 22 tests in 0.618s
+Ran 22 tests in 0.591s
 
 OK
 ```

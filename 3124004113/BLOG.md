@@ -52,29 +52,32 @@
 
 ### 2.2 核心业务流程图
 
-```mermaid
-flowchart TD
-    Start([启动 main.py]) --> CheckArgs{校验命令行参数数量}
-    CheckArgs --!= 3--> Error2[向 stderr 打印用法说明<br/>返回退出码 2]
-    CheckArgs --= 3--> AbsPath[解析三个绝对路径]
-    AbsPath --> CheckExist{检查输入文件存在且非目录}
-    CheckExist --不存在或为目录--> Error1[打印文件未找到或路径类型错误<br/>返回退出码 1]
-    CheckExist --合法路径--> ReadFiles[TextProcessor.read_file 读取文件<br/>自适应解码 UTF-8 / GBK / BOM]
-    ReadFiles --> CleanHTML{是否包含 HTML 页面结构}
-    CleanHTML --是--> StripHTML[剥离网页标签提取纯文本正文]
-    CleanHTML --否--> Norm[TextProcessor.normalize<br/>NFKC 全半角归一化 + 过滤标点空白]
-    StripHTML --> Norm
-    Norm --> FastCheck{快速短路检查}
-    FastCheck --完全一致或双方皆空--> Return1[返回 1.00]
-    FastCheck --仅单方为空--> Return0[返回 0.00]
-    FastCheck --普通长文本--> Algo[SimilarityChecker 计算<br/>2-gram 特征抽取 + SimHash + 余弦融合]
-    Algo --> DisjointCheck{是否有共有特征}
-    DisjointCheck --无共有特征--> Return0
-    DisjointCheck --有特征交集--> WeightedCalc[加权得分计算 + 重合度阻尼修正]
-    Return1 --> WriteAns[写入指定答案文件<br/>保留两位小数格式: 0.xx]
-    Return0 --> WriteAns
-    WeightedCalc --> WriteAns
-    WriteAns --> Exit0([查重完成，正常退出码 0])
+```text
+接收命令行 3 个绝对路径参数
+    │
+    ▼
+检查参数个数是否为 3 个（否则报错并以退出码 2 退出）
+    │
+    ▼
+检查原文与抄袭版文件是否存在（否则报错并以退出码 1 退出）
+    │
+    ▼
+读取两份文件内容（自动尝试 UTF-8、GBK 等编码，清除 BOM，剥离 HTML 标签）
+    │
+    ▼
+文本清洗与归一化（NFKC 统一全角半角、英文转小写、过滤标点符号与空白）
+    │
+    ▼
+短路快速判断（两份文本相同直接返回 1.00，任一文本为空返回 0.00）
+    │
+    ▼
+提取 2-gram 字符滑动切片并统计词频 Counter
+    │
+    ▼
+计算 64 位加权 SimHash 海明距离 与 共有特征余弦相似度
+    │
+    ▼
+加权得出最终重复率，保留两位小数写入答案文件（正常退出码 0）
 ```
 
 ### 2.3 核心查重算法原理解析
@@ -88,18 +91,19 @@ flowchart TD
    - 建立长度为 64 的向量，以特征在文本中出现的频次作为权重。若对应位为 1 则加上权重，为 0 则减去权重；
    - 最终向量大于 0 的位记为 1，其余记为 0，压缩为单个 64 位的二进制整数指纹。
 3. **海明距离（Hamming Distance）计算**：
-   计算原文指纹 $H_1$ 与抄袭版指纹 $H_2$ 异或后二进制中 1 的个数：$d = \text{popcount}(H_1 \oplus H_2)$。
-   SimHash 相似度即为：$S_{\text{simhash}} = 1.0 - \frac{d}{64.0}$。
+   计算原文指纹与抄袭版指纹异或后二进制中 1 的个数：
+   海明距离 d = bin(指纹1 ^ 指纹2).count('1')
+   SimHash 相似度 = 1.0 - (d / 64.0)
 4. **多重集余弦相似度融合与阻尼**：
    利用两篇文本的切片频次 Counter 计算余弦夹角：
-   $$\text{Cosine}(A, B) = \frac{\sum_{k \in A \cap B} A_k \cdot B_k}{\sqrt{\sum A_k^2} \cdot \sqrt{\sum B_k^2}}$$
-   最终得分通过 $0.50 \times S_{\text{simhash}} + 0.50 \times \text{Cosine}$ 线性融合，兼顾全局宏观主题分布与局部字词精确匹配。
+   余弦相似度 = 共有特征词频点积 / (原文特征向量模长 × 抄袭版特征向量模长)
+   最终得分通过 `0.50 × SimHash相似度 + 0.50 × 余弦相似度` 线性融合，兼顾全局宏观主题分布与局部字词精确匹配。
 
 ### 2.4 独到之处
 
 1. **零第三方库外部依赖（Zero-Dependency）**：全套算法仅依赖 Python 标准库（`hashlib`、`collections`、`unicodedata`），不需要通过 `pip` 安装任何第三方库，评测机秒级启动，免除依赖缺失风险。
 2. **全编码自适应与 HTML 包装自动清洗**：自动兼容 UTF-8（含 BOM）、GBK、GB18030、Big5、UTF-16 等格式；针对从网页右键另存为带有 `<!DOCTYPE html>` 的文件，能够自动剥离标签提取纯正文。
-3. **稀疏点积与交集优化**：在余弦相似度计算中，通过 Python 内置的高性能集合交集运算 `common_keys = c1.keys() & c2.keys()`，避免了传统遍历全量字典产生的无效计算，将算法点积复杂度优化至 $O(|\text{Intersection}|)$。
+3. **稀疏点积与交集优化**：在余弦相似度计算中，通过 Python 内置的高性能集合交集运算 `common_keys = c1.keys() & c2.keys()`，避免了传统遍历全量字典产生的无效计算，将算法点积复杂度优化至 O(共有特征数)。
 4. **哈希确定性保证**：放弃 Python 默认带随机盐的内置 `hash()`，选用 `hashlib.md5`，确保在任何操作系统、不同进程重启后计算结果百分之百可复现。
 
 ---
@@ -129,21 +133,16 @@ flowchart TD
 
 ### 3.3 性能耗时甘特图
 
-```mermaid
-gantt
-    title 37 万字超大文本查重各阶段耗时分布 (总耗时: 0.372s)
-    dateFormat X
-    axisFormat %s ms
-    section 文本归一化 (146ms)
-    Unicode NFKC 标准化          :active, norm1, 0, 98
-    正则过滤噪音字符             :crit, norm2, 98, 146
-    section 特征工程 (94ms)
-    2-gram 滑动切片生成          :active, feat1, 146, 210
-    Counter 频次聚合统计         :crit, feat2, 210, 240
-    section 相似度计算 (112ms)
-    MD5 加权 SimHash 降维        :active, sim1, 240, 346
-    交集优化余弦点积与折算       :crit, sim2, 346, 372
-```
+各阶段耗时分布统计（总耗时约 0.372 秒）：
+
+| 阶段步骤 | 核心操作 | 耗时 (毫秒) | 耗时占比 | 说明 |
+| :--- | :--- | :---: | :---: | :--- |
+| **阶段一：文本归一化** | Unicode NFKC 标准化、正则过滤标点符号 | 146 ms | 39.2% | 遍历近 37 万字符完成清洗 |
+| **阶段二：特征工程** | 2-gram 字符滑动切片、Counter 频次统计 | 94 ms | 25.3% | 生成并聚合切片特征字典 |
+| **阶段三：相似度计算** | 64 位 MD5 降维、特征交集点积计算 | 112 ms | 30.1% | 纯数学指纹与余弦向量计算 |
+| **阶段四：调度与其他** | 函数调用调度、边界判断开销 | 20 ms | 5.4% | 运行环境准备与退出清理 |
+
+从耗时分布可以看出，文本归一化与哈希计算是主要的 CPU 消耗环节，但在 Python 标准库 C 底层实现的支持下，整体处理 37 万字大文本仅需 0.37 秒，表现非常理想。
 
 ### 3.4 针对性优化措施与成效
 

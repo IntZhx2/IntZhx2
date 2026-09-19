@@ -2,6 +2,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.prof
+*.stats
+Exercises.txt
+Answers.txt
+Grade.txt
 ans*.txt
 .DS_Store
 .venv/
+

@@ -1,62 +1,67 @@
-============================================================
+======================================================================
 小学四则运算题目生成器 10,000 题 cProfile 性能分析报告
-============================================================
+======================================================================
 测试题目数: 10,000
 数值上限范围 -r: 10
-生成与格式化墙钟耗时: 0.6571 秒
-批改回读验证墙钟耗时: 0.1930 秒
+操作系统平台: macOS-27.0-arm64-arm-64bit
+处理器架构: arm64
+Python 运行环境: 3.9.6
+生成与格式化耗时: 0.6859 秒 (吞吐量: 14,579 题/秒)
+批改回读验证耗时: 0.2411 秒 (吞吐量: 41,470 题/秒)
+端到端全流程耗时: 0.9271 秒
 批改正确率: 100.0% (Correct: 10000, Wrong: 0)
+内存常驻峰值: 约 32 MiB
 
-------------------------------------------------------------
+----------------------------------------------------------------------
 按累计耗时 (cumtime) 排序的前 15 个关键函数调用:
-------------------------------------------------------------
-         3249813 function calls (3094043 primitive calls) in 0.655 seconds
+----------------------------------------------------------------------
+         3228499 function calls (3072729 primitive calls) in 0.684 seconds
 
    Ordered by: cumulative time
    List reduced from 58 to 15 due to restriction <15>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-        1    0.020    0.020    0.524    0.524 generator.py:164(generate_exercises)
-    17827    0.011    0.000    0.327    0.000 generator.py:156(generate_single_candidate)
-    17827    0.008    0.000    0.215    0.000 generator.py:160(<listcomp>)
-    53551    0.044    0.000    0.207    0.000 generator.py:19(random_operand)
-86781/17827    0.043    0.000    0.133    0.000 generator.py:53(validate_node)
-   114942    0.019    0.000    0.115    0.000 random.py:334(randint)
-        1    0.002    0.002    0.101    0.101 benchmark_10k.py:35(<listcomp>)
-    10000    0.003    0.000    0.099    0.000 renderer.py:74(format_exercise_line)
-   121420    0.067    0.000    0.098    0.000 fractions.py:62(__new__)
-51206/10000    0.024    0.000    0.096    0.000 renderer.py:37(render_expression)
-   114942    0.039    0.000    0.096    0.000 random.py:290(randrange)
-    40603    0.036    0.000    0.089    0.000 renderer.py:17(format_value)
-    17827    0.019    0.000    0.082    0.000 generator.py:101(generate_tree_shape)
-   150666    0.057    0.000    0.074    0.000 random.py:237(_randbelow_with_getrandbits)
-   440854    0.032    0.000    0.058    0.000 {built-in method builtins.isinstance}
+        1    0.020    0.020    0.545    0.545 generator.py:180(generate_exercises)
+    17827    0.013    0.000    0.340    0.000 generator.py:169(generate_single_candidate)
+    17827    0.008    0.000    0.213    0.000 generator.py:173(<listcomp>)
+    53551    0.043    0.000    0.205    0.000 generator.py:19(random_operand)
+86781/17827    0.043    0.000    0.137    0.000 generator.py:61(validate_node)
+   114942    0.021    0.000    0.131    0.000 random.py:334(randint)
+   114942    0.040    0.000    0.110    0.000 random.py:290(randrange)
+        1    0.002    0.002    0.107    0.107 benchmark_10k.py:302(<listcomp>)
+    10000    0.003    0.000    0.105    0.000 renderer.py:74(format_exercise_line)
+51206/10000    0.025    0.000    0.102    0.000 renderer.py:37(render_expression)
+   121420    0.066    0.000    0.101    0.000 fractions.py:62(__new__)
+    40603    0.037    0.000    0.095    0.000 renderer.py:17(format_value)
+   150666    0.068    0.000    0.088    0.000 random.py:237(_randbelow_with_getrandbits)
+    17827    0.021    0.000    0.087    0.000 generator.py:109(generate_tree_shape)
+   440854    0.036    0.000    0.066    0.000 {built-in method builtins.isinstance}
 
 
 
-------------------------------------------------------------
+----------------------------------------------------------------------
 按自身耗时 (tottime) 排序的前 15 个函数调用:
-------------------------------------------------------------
-         3249813 function calls (3094043 primitive calls) in 0.655 seconds
+----------------------------------------------------------------------
+         3228499 function calls (3072729 primitive calls) in 0.684 seconds
 
    Ordered by: internal time
    List reduced from 58 to 15 due to restriction <15>
 
    ncalls  tottime  percall  cumtime  percall filename:lineno(function)
-   121420    0.067    0.000    0.098    0.000 fractions.py:62(__new__)
-   150666    0.057    0.000    0.074    0.000 random.py:237(_randbelow_with_getrandbits)
-    53551    0.044    0.000    0.207    0.000 generator.py:19(random_operand)
-86781/17827    0.043    0.000    0.133    0.000 generator.py:53(validate_node)
-   114942    0.039    0.000    0.096    0.000 random.py:290(randrange)
-    40603    0.036    0.000    0.089    0.000 renderer.py:17(format_value)
-   440854    0.032    0.000    0.058    0.000 {built-in method builtins.isinstance}
-57766/12158    0.029    0.000    0.042    0.000 expression.py:115(canonical_key)
-    53551    0.026    0.000    0.047    0.000 expression.py:40(__init__)
-51206/10000    0.024    0.000    0.096    0.000 renderer.py:37(render_expression)
-        1    0.020    0.020    0.524    0.524 generator.py:164(generate_exercises)
-    17827    0.019    0.000    0.082    0.000 generator.py:101(generate_tree_shape)
-   114942    0.019    0.000    0.115    0.000 random.py:334(randint)
-   134856    0.013    0.000    0.025    0.000 abc.py:117(__instancecheck__)
-   251037    0.012    0.000    0.012    0.000 fractions.py:260(denominator)
+   150666    0.068    0.000    0.088    0.000 random.py:237(_randbelow_with_getrandbits)
+   121420    0.066    0.000    0.101    0.000 fractions.py:62(__new__)
+86781/17827    0.043    0.000    0.137    0.000 generator.py:61(validate_node)
+    53551    0.043    0.000    0.205    0.000 generator.py:19(random_operand)
+   114942    0.040    0.000    0.110    0.000 random.py:290(randrange)
+    40603    0.037    0.000    0.095    0.000 renderer.py:17(format_value)
+   440854    0.036    0.000    0.066    0.000 {built-in method builtins.isinstance}
+57766/12158    0.029    0.000    0.044    0.000 expression.py:115(canonical_key)
+51206/10000    0.025    0.000    0.102    0.000 renderer.py:37(render_expression)
+   114942    0.021    0.000    0.131    0.000 random.py:334(randint)
+    17827    0.021    0.000    0.087    0.000 generator.py:109(generate_tree_shape)
+    53551    0.020    0.000    0.042    0.000 expression.py:40(__init__)
+        1    0.020    0.020    0.545    0.545 generator.py:180(generate_exercises)
+   134856    0.018    0.000    0.030    0.000 abc.py:117(__instancecheck__)
+   251037    0.014    0.000    0.014    0.000 fractions.py:260(denominator)
 
 

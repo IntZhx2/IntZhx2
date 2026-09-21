@@ -19,35 +19,43 @@ OPERATORS = ["+", "−", "×", "÷"]
 def random_operand(range_val: int, rng: random.Random) -> Number:
     """Generate a random number or fraction within the specified range [0, range_val).
 
-    Can generate:
-    1. Natural numbers: 0 to range_val - 1
-    2. Proper fractions: num / den where 2 <= den < max(3, range_val) and 1 <= num < den
-    3. Mixed numbers: integer + proper fraction where integer < range_val - 1
+    - If range_val == 1:
+        Only natural number 0 (< 1). No valid fractions exist since denominator must be >= 2.
+    - If range_val == 2:
+        Only natural numbers 0 and 1 (< 2). No valid proper fractions exist since denominator
+        must be >= 2 and < 2 (strict upper bound excludes 2).
+    - If range_val >= 3:
+        1. Natural numbers: 0 to range_val - 1
+        2. Proper fractions: num / den where 2 <= den <= range_val - 1 and 1 <= num < den
+        3. Mixed numbers: whole'num/den where whole in [1, max(1, range_val - 2)] and 2 <= den <= range_val - 1
     """
-    if range_val < 2:
-        raise ValueError(f"Range value must be >= 2, got {range_val}")
+    if range_val < 1:
+        raise ValueError(f"Range value must be >= 1, got {range_val}")
+
+    if range_val == 1:
+        return Number(0)
+
+    if range_val == 2:
+        return Number(rng.randint(0, 1))
 
     choice = rng.random()
 
-    # 45% natural number
+    # 45% natural number in [0, range_val - 1]
     if choice < 0.45:
         val = rng.randint(0, range_val - 1)
         return Number(val)
 
-    # 40% pure proper fraction
-    max_den = max(2, range_val - 1)
-    den = rng.randint(2, max_den)
+    # 40% pure proper fraction: denominator strictly < range_val
+    den = rng.randint(2, range_val - 1)
     num = rng.randint(1, den - 1)
 
     if choice < 0.85:
         return Number(Fraction(num, den))
 
     # 15% mixed number (< range_val)
-    if range_val > 2:
-        whole = rng.randint(1, range_val - 2)
-        return Number(Fraction(whole * den + num, den))
-
-    return Number(Fraction(num, den))
+    max_whole = max(1, range_val - 2)
+    whole = rng.randint(1, max_whole)
+    return Number(Fraction(whole * den + num, den))
 
 
 def validate_node(node: Expression, max_operators: int = 3) -> Tuple[Fraction, int]:
@@ -98,19 +106,24 @@ def validate_node(node: Expression, max_operators: int = 3) -> Tuple[Fraction, i
     raise TypeError(f"Unknown node type: {type(node)}")
 
 
-def generate_tree_shape(operands: List[Number], rng: random.Random) -> Expression:
+def generate_tree_shape(
+    operands: List[Number],
+    rng: random.Random,
+    allowed_ops: Optional[List[str]] = None,
+) -> Expression:
     """Combine a list of operands into a valid binary expression tree."""
+    ops_pool = allowed_ops or OPERATORS
     if len(operands) == 1:
         return operands[0]
 
     if len(operands) == 2:
-        op = rng.choice(OPERATORS)
+        op = rng.choice(ops_pool)
         return BinaryExpression(op, operands[0], operands[1])
 
     if len(operands) == 3:
         # Two possible binary tree structures
-        op1 = rng.choice(OPERATORS)
-        op2 = rng.choice(OPERATORS)
+        op1 = rng.choice(ops_pool)
+        op2 = rng.choice(ops_pool)
         if rng.random() < 0.5:
             # (A op B) op C
             left = BinaryExpression(op1, operands[0], operands[1])
@@ -123,7 +136,7 @@ def generate_tree_shape(operands: List[Number], rng: random.Random) -> Expressio
     if len(operands) == 4:
         # 5 possible binary tree structures
         shape_type = rng.randint(0, 4)
-        op1, op2, op3 = [rng.choice(OPERATORS) for _ in range(3)]
+        op1, op2, op3 = [rng.choice(ops_pool) for _ in range(3)]
         if shape_type == 0:
             # ((A op B) op C) op D
             t1 = BinaryExpression(op1, operands[0], operands[1])
@@ -158,7 +171,10 @@ def generate_single_candidate(range_val: int, rng: random.Random) -> Expression:
     op_count = rng.randint(1, 3)
     num_operands = op_count + 1
     operands = [random_operand(range_val, rng) for _ in range(num_operands)]
-    return generate_tree_shape(operands, rng)
+    # For range_val <= 2, division cannot yield positive non-integer fractions without
+    # exceeding bounds (e.g. denominator >= 2), so restrict operators to +, −, ×.
+    allowed_ops = ["+", "−", "×"] if range_val <= 2 else OPERATORS
+    return generate_tree_shape(operands, rng, allowed_ops=allowed_ops)
 
 
 def generate_exercises(
@@ -171,7 +187,7 @@ def generate_exercises(
 
     Args:
         count: Number of exercises to generate.
-        range_val: Maximum numeric range for numbers and denominators.
+        range_val: Maximum numeric range for numbers and denominators (must be >= 1).
         seed: Optional random seed for reproducible generation.
         max_attempts_per_item: Max retry limit per item before raising error.
 
@@ -183,8 +199,8 @@ def generate_exercises(
     """
     if count <= 0:
         return []
-    if range_val <= 1:
-        raise ValueError(f"Range value -r must be >= 2, got {range_val}")
+    if range_val < 1:
+        raise ValueError(f"Range value -r must be >= 1, got {range_val}")
 
     rng = random.Random(seed)
     seen_keys: Set[Tuple] = set()

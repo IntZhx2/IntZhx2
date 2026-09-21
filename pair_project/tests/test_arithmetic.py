@@ -3,6 +3,7 @@
 
 from fractions import Fraction
 from pathlib import Path
+import random
 import subprocess
 import sys
 import tempfile
@@ -229,6 +230,46 @@ class TestGeneratorAndConstraints(unittest.TestCase):
             # Verify exact calculation matches
             self.assertEqual(expr.evaluate(), ans)
 
+    def test_random_operand_bounds_r1(self):
+        rng = random.Random(42)
+        op = random_operand(1, rng)
+        self.assertEqual(op.value, Fraction(0, 1))
+
+    def test_random_operand_bounds_r2_strict(self):
+        rng = random.Random(42)
+        # Verify that for -r 2, all operands are strictly in {0, 1}, and never any fraction (e.g. 1/2)
+        for _ in range(100):
+            op = random_operand(2, rng)
+            self.assertIn(op.value, [Fraction(0, 1), Fraction(1, 1)])
+            self.assertEqual(op.value.denominator, 1)
+
+    def test_random_operand_bounds_r3_strict(self):
+        rng = random.Random(42)
+        # Verify that for -r 3, proper fraction denominators are strictly < 3 (only 2 allowed)
+        for _ in range(100):
+            op = random_operand(3, rng)
+            self.assertLess(op.value.denominator, 3)
+
+    def test_generate_exercises_r1_minimal(self):
+        # -r 1 is explicitly allowed by homework specification
+        exercises = generate_exercises(count=3, range_val=1, seed=42)
+        self.assertEqual(len(exercises), 3)
+        for expr, ans in exercises:
+            self.assertEqual(ans, Fraction(0, 1))
+
+    def test_generate_exercises_r2_strict_bound(self):
+        def get_leaf_numbers(node):
+            if isinstance(node, Number):
+                return [node.value]
+            return get_leaf_numbers(node.left) + get_leaf_numbers(node.right)
+
+        exercises = generate_exercises(count=20, range_val=2, seed=42)
+        self.assertEqual(len(exercises), 20)
+        for expr, ans in exercises:
+            for val in get_leaf_numbers(expr):
+                self.assertIn(val, [Fraction(0, 1), Fraction(1, 1)])
+                self.assertEqual(val.denominator, 1)
+
 
 class TestGrader(unittest.TestCase):
     """Test answer grading and report formatting."""
@@ -316,6 +357,20 @@ class TestCommandLineEndToEnd(unittest.TestCase):
         )
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("不能混用", res.stderr)
+
+    def test_cli_minimal_range_r1(self):
+        res = subprocess.run(
+            [sys.executable, str(self.main_py), "-n", "1", "-r", "1"],
+            cwd=self.work_dir,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        ex_file = self.work_dir / "Exercises.txt"
+        ans_file = self.work_dir / "Answers.txt"
+        self.assertTrue(ex_file.is_file())
+        self.assertTrue(ans_file.is_file())
+        self.assertIn("0", ans_file.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

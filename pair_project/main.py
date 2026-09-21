@@ -37,7 +37,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "-r",
         dest="range_val",
         type=int,
-        help="题目中数值（自然数、真分数和分母）的数值上限（必须 >= 2）",
+        help="题目中数值（自然数、真分数和分母）的数值上限（自然数，必须 >= 1）",
     )
     parser.add_argument(
         "-e",
@@ -58,8 +58,8 @@ def run_generation(count: int, range_val: int, output_dir: Path) -> None:
     """Execute exercise generation mode."""
     if count <= 0:
         raise CommandLineArgumentError(f"题目数量 -n 必须大于 0，当前为: {count}")
-    if range_val < 2:
-        raise CommandLineArgumentError(f"数值范围 -r 必须大于等于 2，当前为: {range_val}")
+    if range_val < 1:
+        raise CommandLineArgumentError(f"数值范围 -r 必须为正整数（>= 1），当前为: {range_val}")
 
     exercises = generate_exercises(count=count, range_val=range_val)
 

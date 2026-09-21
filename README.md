@@ -31,8 +31,8 @@
 - [结对项目 - 小学四则运算题目生成器与批改系统](pair_project/README.md)
   - 成员：赵海翔（3124004113）、何卓文（3124004132）
   - 核心模块：`main.py`、`expression.py`、`generator.py`、`renderer.py`、`parser.py`、`grader.py`
-  - 测试套件：38 个全覆盖自动化测试 `tests/test_arithmetic.py`
-  - 性能剖析：10000 题规模 cProfile 报告 `profile/`（生成 0.65 秒，批改 0.19 秒）
+  - 测试套件：44 个全覆盖自动化测试 `tests/test_arithmetic.py`
+  - 性能剖析：10000 题规模 cProfile 报告与图表 `profile/`（生成 0.686 秒，批改 0.241 秒）
   - 结对博客：[完整结对作业博文](pair_project/BLOG.md)
   - 任务耗时：[PSP 2.1 记录表](pair_project/docs/PSP.md)
   - 效能报告：[性能分析与优化](pair_project/docs/performance.md)

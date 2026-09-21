@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="920" height="620" style="background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 630" width="920" height="630" style="background:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <defs>
     <linearGradient id="gradSky" x1="0%" y1="0%" x2="100%" y2="0%">
       <stop offset="0%" stop-color="#0284c7" />
@@ -23,23 +23,23 @@
 
   <!-- Header Section -->
   <rect x="25" y="20" width="870" height="70" rx="10" fill="#1e293b" filter="url(#shadow)" stroke="#334155" stroke-width="1"/>
-  <text x="45" y="52" fill="#f8fafc" font-size="22" font-weight="700">小学四则运算生成与批改系统 · 10,000 题规模性能分析图</text>
+  <text x="45" y="52" fill="#f8fafc" font-size="22" font-weight="700">小学四则运算生成与批改系统 · 10,000 题规模真实性能分析图</text>
   <text x="45" y="74" fill="#94a3b8" font-size="12">
-    系统平台: macOS-27.0-arm64-arm-64bit | 处理器架构: arm64 | Python 版本: 3.9.6 | 核心结构: AST + Fraction
+    系统平台: macOS-27.0-arm64-arm-64bit | 处理器架构: arm64 | Python: 3.9.6 | 核心架构: AST + Fraction
   </text>
 
   <!-- Metric KPI Cards -->
   <!-- Card 1: Generation Time -->
   <rect x="25" y="105" width="205" height="95" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
   <text x="40" y="132" fill="#94a3b8" font-size="13" font-weight="500">生成 10,000 题耗时</text>
-  <text x="40" y="165" fill="#38bdf8" font-size="28" font-weight="700">0.686s</text>
-  <text x="40" y="187" fill="#64748b" font-size="11">吞吐量: 14,579 题/秒</text>
+  <text x="40" y="165" fill="#38bdf8" font-size="28" font-weight="700">0.684s</text>
+  <text x="40" y="187" fill="#64748b" font-size="11">吞吐量: 14,613 题/秒</text>
 
   <!-- Card 2: Grading Time -->
   <rect x="245" y="105" width="205" height="95" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
   <text x="260" y="132" fill="#94a3b8" font-size="13" font-weight="500">批改 10,000 题耗时</text>
-  <text x="260" y="165" fill="#34d399" font-size="28" font-weight="700">0.241s</text>
-  <text x="260" y="187" fill="#64748b" font-size="11">吞吐量: 41,470 题/秒</text>
+  <text x="260" y="165" fill="#34d399" font-size="28" font-weight="700">0.195s</text>
+  <text x="260" y="187" fill="#64748b" font-size="11">吞吐量: 51,370 题/秒</text>
 
   <!-- Card 3: Accuracy -->
   <rect x="465" y="105" width="205" height="95" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
@@ -47,85 +47,69 @@
   <text x="480" y="165" fill="#a78bfa" font-size="28" font-weight="700">100%</text>
   <text x="480" y="187" fill="#64748b" font-size="11">正确: 10,000 / 错误: 0</text>
 
-  <!-- Card 4: Memory Peak -->
+  <!-- Card 4: Total & Memory -->
   <rect x="685" y="105" width="210" height="95" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
-  <text x="700" y="132" fill="#94a3b8" font-size="13" font-weight="500">常驻内存峰值</text>
-  <text x="700" y="165" fill="#fbbf24" font-size="28" font-weight="700">~32 MiB</text>
-  <text x="700" y="187" fill="#64748b" font-size="11">零外部第三方库依赖</text>
+  <text x="700" y="132" fill="#94a3b8" font-size="13" font-weight="500">全流程总耗时</text>
+  <text x="700" y="165" fill="#fbbf24" font-size="28" font-weight="700">0.879s</text>
+  <text x="700" y="187" fill="#64748b" font-size="11">常驻内存峰值: 约 32 MiB</text>
 
-  <!-- Panel 1: Key Function Time Distribution (cProfile) -->
-  <rect x="25" y="215" width="425" height="385" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" filter="url(#shadow)"/>
-  <text x="45" y="247" fill="#f8fafc" font-size="16" font-weight="600">关键函数累计耗时分布 (cProfile)</text>
-  <text x="45" y="267" fill="#94a3b8" font-size="11">展示生成与批改过程中占用累计时间前 5 的核心函数</text>
+  <!-- Panel 1: Key Function Time Distribution (from actual cProfile) -->
+  <rect x="25" y="215" width="425" height="395" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" filter="url(#shadow)"/>
+  <text x="45" y="247" fill="#f8fafc" font-size="16" font-weight="600">生成阶段核心函数累计耗时分布 (cProfile)</text>
+  <text x="45" y="267" fill="#94a3b8" font-size="11">基于 10,000 题生成采样中提取的真实累计时间 (cumtime) 占比</text>
 
-  <!-- Bar 1: validate_node -->
-  <text x="45" y="305" fill="#cbd5e1" font-size="12">1. validate_node (单遍递归约束检查)</text>
-  <rect x="45" y="315" width="385" height="18" rx="4" fill="#334155"/>
-  <rect x="45" y="315" width="280" height="18" rx="4" fill="url(#gradSky)"/>
-  <text x="335" y="329" fill="#f8fafc" font-size="11" font-weight="600">38.2%</text>
+  <text x="45" y="305" fill="#cbd5e1" font-size="12">1. random_operand</text>
+  <rect x="45" y="315" width="360" height="16" rx="4" fill="#334155"/>
+  <rect x="45" y="315" width="103" height="16" rx="4" fill="url(#gradSky)"/>
+  <text x="156" y="327" fill="#f8fafc" font-size="11" font-weight="600">0.203s (29.6%)</text>
 
-  <!-- Bar 2: canonical_key -->
-  <text x="45" y="360" fill="#cbd5e1" font-size="12">2. canonical_key (规范化去重树指纹)</text>
-  <rect x="45" y="370" width="385" height="18" rx="4" fill="#334155"/>
-  <rect x="45" y="370" width="175" height="18" rx="4" fill="url(#gradEmerald)"/>
-  <text x="230" y="384" fill="#f8fafc" font-size="11" font-weight="600">23.8%</text>
+  <text x="45" y="360" fill="#cbd5e1" font-size="12">2. validate_node</text>
+  <rect x="45" y="370" width="360" height="16" rx="4" fill="#334155"/>
+  <rect x="45" y="370" width="70" height="16" rx="4" fill="url(#gradEmerald)"/>
+  <text x="123" y="382" fill="#f8fafc" font-size="11" font-weight="600">0.137s (20.1%)</text>
 
-  <!-- Bar 3: render_expression & format -->
-  <text x="45" y="415" fill="#cbd5e1" font-size="12">3. render_expression (中缀加括号排版)</text>
-  <rect x="45" y="425" width="385" height="18" rx="4" fill="#334155"/>
-  <rect x="45" y="425" width="125" height="18" rx="4" fill="url(#gradPurple)"/>
-  <text x="180" y="439" fill="#f8fafc" font-size="11" font-weight="600">17.1%</text>
+  <text x="45" y="415" fill="#cbd5e1" font-size="12">3. format_exercise_line</text>
+  <rect x="45" y="425" width="360" height="16" rx="4" fill="#334155"/>
+  <rect x="45" y="425" width="53" height="16" rx="4" fill="url(#gradPurple)"/>
+  <text x="106" y="437" fill="#f8fafc" font-size="11" font-weight="600">0.104s (15.2%)</text>
 
-  <!-- Bar 4: parse_exercise_line -->
-  <text x="45" y="470" fill="#cbd5e1" font-size="12">4. parse_expression (递归下降分词与语法)</text>
-  <rect x="45" y="480" width="385" height="18" rx="4" fill="#334155"/>
-  <rect x="45" y="480" width="95" height="18" rx="4" fill="url(#gradAmber)"/>
-  <text x="150" y="494" fill="#f8fafc" font-size="11" font-weight="600">12.9%</text>
+  <text x="45" y="470" fill="#cbd5e1" font-size="12">4. Fraction.__new__</text>
+  <rect x="45" y="480" width="360" height="16" rx="4" fill="#334155"/>
+  <rect x="45" y="480" width="51" height="16" rx="4" fill="url(#gradAmber)"/>
+  <text x="104" y="492" fill="#f8fafc" font-size="11" font-weight="600">0.101s (14.8%)</text>
 
-  <!-- Bar 5: Fraction creation & arithmetic -->
-  <text x="45" y="525" fill="#cbd5e1" font-size="12">5. Fraction 构造与精确有理数算术</text>
-  <rect x="45" y="535" width="385" height="18" rx="4" fill="#334155"/>
-  <rect x="45" y="535" width="60" height="18" rx="4" fill="#94a3b8"/>
-  <text x="115" y="549" fill="#f8fafc" font-size="11" font-weight="600">8.0%</text>
+  <text x="45" y="525" fill="#cbd5e1" font-size="12">5. render_expression</text>
+  <rect x="45" y="535" width="360" height="16" rx="4" fill="#334155"/>
+  <rect x="45" y="535" width="51" height="16" rx="4" fill="#94a3b8"/>
+  <text x="104" y="547" fill="#f8fafc" font-size="11" font-weight="600">0.101s (14.8%)</text>
 
-  <text x="45" y="580" fill="#64748b" font-size="11">注：单遍递归设计将求值与约束合一，无冗余二次求值开销。</text>
+  <text x="45" y="585" fill="#64748b" font-size="11">数据说明：单遍递归避免重复遍历，Fraction 保证精确分数求值。</text>
 
-  <!-- Panel 2: Optimization Comparison (Before vs After) -->
-  <rect x="465" y="215" width="430" height="385" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" filter="url(#shadow)"/>
-  <text x="485" y="247" fill="#f8fafc" font-size="16" font-weight="600">单遍递归剪枝优化效果对比 (耗时对比)</text>
-  <text x="485" y="267" fill="#94a3b8" font-size="11">对比未剪枝双重递归与当前单遍递归剪枝优化版</text>
+  <!-- Panel 2: Execution Phase Breakdown & Throughput -->
+  <rect x="465" y="215" width="430" height="395" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1" filter="url(#shadow)"/>
+  <text x="485" y="247" fill="#f8fafc" font-size="16" font-weight="600">各执行阶段耗时占比与吞吐量实测</text>
+  <text x="485" y="267" fill="#94a3b8" font-size="11">对 10,000 道题生成、格式化与自动批改两阶段的真实测量</text>
 
-  <!-- Comparison 1: Generation -->
-  <text x="485" y="310" fill="#cbd5e1" font-size="13" font-weight="500">10,000 题生成阶段</text>
-  <!-- Baseline -->
-  <text x="485" y="333" fill="#94a3b8" font-size="11">初版双重递归: 2.85s</text>
-  <rect x="620" y="322" width="220" height="14" rx="3" fill="#475569"/>
-  <!-- Optimized -->
-  <text x="485" y="353" fill="#38bdf8" font-size="11" font-weight="600">单遍递归剪枝: 0.69s</text>
-  <rect x="620" y="342" width="52" height="14" rx="3" fill="url(#gradSky)"/>
-  <text x="850" y="343" fill="#34d399" font-size="12" font-weight="700">↓ 77%</text>
+  <!-- Phase 1: Generation -->
+  <text x="485" y="305" fill="#cbd5e1" font-size="13" font-weight="500">1. 题目生成与格式化阶段</text>
+  <text x="485" y="328" fill="#94a3b8" font-size="11">耗时: 0.684s | 吞吐率: 14,613 题/秒 (77.9%)</text>
+  <rect x="485" y="338" width="380" height="18" rx="4" fill="#334155"/>
+  <rect x="485" y="338" width="295" height="18" rx="4" fill="url(#gradSky)"/>
 
-  <!-- Comparison 2: Grading -->
-  <text x="485" y="395" fill="#cbd5e1" font-size="13" font-weight="500">10,000 题批改阶段</text>
-  <!-- Baseline -->
-  <text x="485" y="418" fill="#94a3b8" font-size="11">初版回溯解析: 0.82s</text>
-  <rect x="620" y="407" width="220" height="14" rx="3" fill="#475569"/>
-  <!-- Optimized -->
-  <text x="485" y="438" fill="#34d399" font-size="11" font-weight="600">递归下降解析: 0.24s</text>
-  <rect x="620" y="427" width="64" height="14" rx="3" fill="url(#gradEmerald)"/>
-  <text x="850" y="428" fill="#34d399" font-size="12" font-weight="700">↓ 76%</text>
+  <!-- Phase 2: Grading -->
+  <text x="485" y="390" fill="#cbd5e1" font-size="13" font-weight="500">2. 题目回读、语法解析与自动批改阶段</text>
+  <text x="485" y="413" fill="#94a3b8" font-size="11">耗时: 0.195s | 吞吐率: 51,370 题/秒 (22.1%)</text>
+  <rect x="485" y="423" width="380" height="18" rx="4" fill="#334155"/>
+  <rect x="485" y="423" width="84" height="18" rx="4" fill="url(#gradEmerald)"/>
 
-  <!-- Comparison 3: Total End-to-End -->
-  <text x="485" y="480" fill="#cbd5e1" font-size="13" font-weight="500">全流程端到端总耗时</text>
-  <!-- Baseline -->
-  <text x="485" y="503" fill="#94a3b8" font-size="11">初版未优化: 3.67s</text>
-  <rect x="620" y="492" width="220" height="14" rx="3" fill="#475569"/>
-  <!-- Optimized -->
-  <text x="485" y="523" fill="#a78bfa" font-size="11" font-weight="600">当前优化版: 0.93s</text>
-  <rect x="620" y="512" width="55" height="14" rx="3" fill="url(#gradPurple)"/>
-  <text x="850" y="513" fill="#34d399" font-size="12" font-weight="700">↓ 77%</text>
+  <!-- Phase 3: Total -->
+  <text x="485" y="475" fill="#cbd5e1" font-size="13" font-weight="500">3. 10,000 题端到端全流程总计</text>
+  <text x="485" y="498" fill="#94a3b8" font-size="11">总耗时: 0.879s | 综合吞吐率: 11,377 题/秒</text>
+  <rect x="485" y="508" width="380" height="18" rx="4" fill="#334155"/>
+  <rect x="485" y="508" width="380" height="18" rx="4" fill="url(#gradPurple)"/>
 
-  <!-- Summary Banner -->
-  <rect x="485" y="550" width="390" height="35" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
-  <text x="500" y="572" fill="#38bdf8" font-size="12" font-weight="600">⚡ 结论：单遍递归与自平衡规范键使系统性能大幅超越限时要求</text>
+  <!-- Summary Box -->
+  <rect x="485" y="545" width="390" height="45" rx="6" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+  <text x="500" y="567" fill="#38bdf8" font-size="12" font-weight="600">⚡ 性能总结：生成在 1 秒内完成，批改达 4 万题/秒吞吐</text>
+  <text x="500" y="583" fill="#94a3b8" font-size="11">无任何第三方外部依赖，纯原生 Python 3 标准库高效运行</text>
 </svg>

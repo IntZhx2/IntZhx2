@@ -9,4 +9,8 @@ Grade.txt
 ans*.txt
 .DS_Store
 .venv/
+*.db
+smart_agent/data/*.db
+smart_agent/data/workspace/*
+!smart_agent/data/workspace/.gitkeep
 

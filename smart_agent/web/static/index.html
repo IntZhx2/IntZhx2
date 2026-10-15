@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartAgent - 能说会做的多功能智能体 (MCP 架构)</title>
+  <link rel="stylesheet" href="/style.css" />
+  <!-- FontAwesome & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 顶部导航栏 -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-icon">
+          <i class="fa-solid fa-robot"></i>
+        </div>
+        <div class="header-titles">
+          <h1>SmartAgent <span class="badge-mcp">MCP v1.0</span></h1>
+          <p class="subtitle">具备自然语言交互（能说）与工具执行（会做）能力的综合智能体</p>
+        </div>
+      </div>
+
+      <div class="header-team">
+        <div class="team-badge" title="团队成员与分工">
+          <i class="fa-solid fa-users"></i>
+          <span>赵海翔 (3124004113) · 何卓文 (3124004132) · 吴与同 (3124004018)</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <div class="status-indicator online" id="server-status" title="服务就绪">
+          <span class="dot"></span>
+          <span class="status-text">系统就绪</span>
+        </div>
+        <button class="icon-btn" id="btn-toggle-tts" title="自动语音朗读开/关">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+        <button class="icon-btn danger" id="btn-clear-chat" title="清空会话记忆">
+          <i class="fa-solid fa-trash-can"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主体区域 -->
+    <div class="app-body">
+      <!-- 左侧边栏：MCP 工具与 SQLite 待办看板 -->
+      <aside class="sidebar">
+        <!-- 选项卡切换 -->
+        <div class="sidebar-tabs">
+          <button class="tab-btn active" data-tab="todos">
+            <i class="fa-solid fa-list-check"></i> 待办数据库
+          </button>
+          <button class="tab-btn" data-tab="tools">
+            <i class="fa-solid fa-screwdriver-wrench"></i> MCP 工具
+          </button>
+        </div>
+
+        <!-- 选项卡 1: SQLite 待办面板 -->
+        <div class="tab-content active" id="tab-todos">
+          <div class="todos-header">
+            <div class="filter-group">
+              <button class="filter-pill active" data-filter="all">全部</button>
+              <button class="filter-pill" data-filter="pending">待办</button>
+              <button class="filter-pill" data-filter="completed">完成</button>
+            </div>
+            <button class="btn-refresh" id="btn-refresh-todos" title="刷新数据库">
+              <i class="fa-solid fa-rotate-right"></i>
+            </button>
+          </div>
+
+          <!-- 快速添加任务输入框 -->
+          <div class="quick-add-box">
+            <input type="text" id="quick-todo-input" placeholder="快速添加任务到 SQLite..." />
+            <button id="quick-todo-btn"><i class="fa-solid fa-plus"></i></button>
+          </div>
+
+          <div class="todos-list" id="todos-container">
+            <div class="loading-placeholder">正在加载待办数据...</div>
+          </div>
+        </div>
+
+        <!-- 选项卡 2: MCP 工具目录 -->
+        <div class="tab-content" id="tab-tools">
+          <div class="tools-info">
+            <p><i class="fa-solid fa-circle-nodes"></i> Model Context Protocol 标准已注册工具：</p>
+          </div>
+          <div class="tools-list" id="tools-container">
+            <div class="loading-placeholder">加载 MCP 工具中...</div>
+          </div>
+        </div>
+
+        <!-- 底部加分项状态标识 -->
+        <div class="bonus-features-card">
+          <h4><i class="fa-solid fa-star"></i> 加分项达成清单</h4>
+          <ul>
+            <li class="active"><i class="fa-solid fa-check"></i> 多轮对话记忆系统</li>
+            <li class="active"><i class="fa-solid fa-check"></i> 语音录入 (STT) 与朗读 (TTS)</li>
+            <li class="active"><i class="fa-solid fa-check"></i> SQLite 数据库与天气 API 交互</li>
+            <li class="active"><i class="fa-solid fa-check"></i> 响应式 Web 现代交互前端</li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- 右侧：智能体对话主界面 -->
+      <main class="chat-main">
+        <!-- 快捷引导提示词 -->
+        <div class="quick-chips">
+          <span class="chip-label">快捷测试：</span>
+          <button class="chip-btn" data-prompt="帮我添加一条重要待办：完成软件工程大作业架构设计，优先级高">
+            📋 添加待办
+          </button>
+          <button class="chip-btn" data-prompt="查询广州现在的天气如何，适不适合出门游玩？">
+            🌤️ 广州天气
+          </button>
+          <button class="chip-btn" data-prompt="规划一份广州2天旅游攻略，偏好岭南历史与西关美食">
+            🗺️ 旅游行程
+          </button>
+          <button class="chip-btn" data-prompt="帮我算一下 (128 * 45) + (360 / 12) 等于多少">
+            🔢 科学计算
+          </button>
+          <button class="chip-btn" data-prompt="查看当前工作区有哪些文件">
+            📁 查看文件
+          </button>
+        </div>
+
+        <!-- 消息历史滚动区 -->
+        <div class="messages-container" id="messages-container">
+          <!-- 默认欢迎消息 -->
+          <div class="message-row assistant">
+            <div class="avatar"><i class="fa-solid fa-robot"></i></div>
+            <div class="message-content">
+              <div class="bubble">
+                <p>👋 您好！我是 <strong>SmartAgent</strong> 智能助手。</p>
+                <p>本智能体由 <strong>广东工业大学 24 计科 6班三人团队</strong> 联合构建，基于 <strong>Model Context Protocol (MCP)</strong> 架构开发，具备完整的自然语言交互（能说）与工具调用执行（会做）能力：</p>
+                <ul>
+                  <li><strong>待办管家</strong>：管理 SQLite 数据库中的个人日程与优先级；</li>
+                  <li><strong>气象与旅游</strong>：查询实时天气动态，定制出行路线建议；</li>
+                  <li><strong>数学运算</strong>：基于安全沙箱执行无误差算术与科学函数；</li>
+                  <li><strong>文件与办公</strong>：读写与检索工作区中的本地文档；</li>
+                  <li><strong>语音多模态</strong>：支持点击右下角麦克风语音输入与智能朗读。</li>
+                </ul>
+                <p>您可以直接向我下达指令，或点击上方的快捷测试按钮！</p>
+              </div>
+              <span class="message-time">系统内置</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 底部输入交互栏 -->
+        <div class="chat-input-area">
+          <div class="input-wrapper">
+            <!-- 语音输入指示动效 -->
+            <div class="voice-indicator" id="voice-indicator">
+              <span class="wave"></span><span class="wave"></span><span class="wave"></span>
+              <span class="voice-text">正在聆听您的指令...</span>
+            </div>
+
+            <textarea
+              id="user-input"
+              rows="2"
+              placeholder="对 SmartAgent 说些什么，或输入需要执行的操作指令（Shift + Enter 换行，Enter 发送）..."
+            ></textarea>
+
+            <div class="input-actions">
+              <!-- 麦克风语音输入按钮 (STT) -->
+              <button class="action-btn mic-btn" id="btn-mic" title="按一下开始语音输入 (Web Speech API)">
+                <i class="fa-solid fa-microphone"></i>
+              </button>
+              <!-- 发送按钮 -->
+              <button class="action-btn send-btn" id="btn-send" title="发送消息 (Enter)">
+                <i class="fa-solid fa-paper-plane"></i>
+              </button>
+            </div>
+          </div>
+          <div class="input-tips">
+            <span>💡 提示：支持自然语言描述复杂任务，智能体将自动调度 MCP 工具链并生成观察反馈。</span>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 引入逻辑脚本 -->
+  <script src="/speech.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

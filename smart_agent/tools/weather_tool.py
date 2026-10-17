@@ -120,6 +120,7 @@ class TravelPlanTool(BaseTool):
         }
 
     def execute(self, **kwargs) -> ToolCallResult:
+        import random
         dest = kwargs.get("destination", "").strip()
         days = kwargs.get("days", 2)
         pref = kwargs.get("preference", "休闲美食")
@@ -129,35 +130,74 @@ class TravelPlanTool(BaseTool):
 
         days = max(1, min(days, 7))
 
+        # 丰富的特色主题景点与美食候选池，让本地离线生成更生动多变
+        gz_themes = [
+            {
+                "theme": "西关烟火与历史老街",
+                "morning": "漫步永庆坊、荔枝湾涌与粤剧艺术博物馆，品尝老字号艇仔粥与银记肠粉",
+                "afternoon": "游览沙面欧式建筑群，在古榕树与石板路上体验民国风情与近代海关旧址",
+                "night": "前往太古仓码头或珠江琶醍，观赏江景落日与创意音乐餐吧",
+            },
+            {
+                "theme": "岭南文化与云山珠水",
+                "morning": "登白云山摩星岭眺望羊城全貌，体验鸣春谷鸟鸣与山顶早茶",
+                "afternoon": "参观越秀公园五羊石雕与镇海楼（广州博物馆），探访古城墙历史",
+                "night": "乘珠江红船游船，夜游两岸灯光秀，近距离打卡海心沙与猎德大桥",
+            },
+            {
+                "theme": "现代都市与艺术打卡",
+                "morning": "参观广东省博物馆与广州大剧院，感受花城广场宏伟的现代中轴线建筑群",
+                "afternoon": "漫步东山口新河浦历史文化街区，打卡百年红砖洋房与先锋独立艺术展",
+                "night": "登上广州塔（小蛮腰）433米观光平台俯瞰流光溢彩的珠江夜色",
+            },
+            {
+                "theme": "古寺禅意与市井早茶",
+                "morning": "前往陶陶居或点都德总店品尝地道早茶（虾饺、红米肠、豉汁凤爪）",
+                "afternoon": "参拜六榕寺与光孝寺（“未有羊城，先有光孝”），漫步古朴惠福东路",
+                "night": "逛北京路步行街千年古道遗址与大佛寺绝美夜景灯光",
+            },
+        ]
+
         plan = [
             f"🗺️ 【{dest} {days}日深度出行计划】（偏好：{pref}）",
             "--------------------------------------------------",
         ]
 
         if "广州" in dest:
-            plan.extend([
-                "📅 Day 1: 西关风情与舌尖体验",
-                "  - 上午: 漫步荔枝湾涌与永庆坊，品尝正宗艇仔粥、双皮奶与银记肠粉",
-                "  - 下午: 参观沙面欧式建筑群与粤剧艺术博物馆",
-                "  - 晚上: 登广州塔观赏羊城全景，乘珠江红船赏两岸灯光秀",
-                "📅 Day 2: 现代岭南与文化探寻",
-                "  - 上午: 广东省博物馆（建议提前微信预约）了解岭南海洋与工艺历史",
-                "  - 下午: 游览越秀公园镇海楼与五羊石雕",
-                "  - 傍晚: 北京路步行街品尝陶陶居/点都德早茶晚市",
-            ])
+            # 随机选取不重复的主题路线组合
+            selected_themes = random.sample(gz_themes, min(days, len(gz_themes)))
+            for idx, item in enumerate(selected_themes, start=1):
+                plan.extend([
+                    f"📅 Day {idx}: {item['theme']}",
+                    f"  - 🌅 上午: {item['morning']}",
+                    f"  - ☀️ 下午: {item['afternoon']}",
+                    f"  - 🌙 晚上: {item['night']}",
+                ])
         else:
+            spots = ["历史文化街区与核心展馆", "网红艺术创意园区与手作工坊", "地标观景台与自然湿地公园", "传统特色小吃街与老字号夜市"]
+            random.shuffle(spots)
             for d in range(1, days + 1):
-                plan.append(f"📅 Day {d}: {dest} 核心地标与{pref}体验")
-                plan.append(f"  - 上午: 游览 {dest} 经典文化地标与历史街区")
-                plan.append(f"  - 下午: 深度体验当地特色展馆或自然景观，打卡热门街巷")
-                plan.append(f"  - 晚上: 品尝地道特色美食，体验夜间城市夜市与生活气息")
+                s1 = spots[(d * 2 - 2) % len(spots)]
+                s2 = spots[(d * 2 - 1) % len(spots)]
+                plan.extend([
+                    f"📅 Day {d}: {dest} 深度探索与{pref}体验",
+                    f"  - 🌅 上午: 游览 {dest} 经典{s1}，感受地道风土人情",
+                    f"  - ☀️ 下午: 深度探访{s2}，拍照打卡与选购特色纪念物",
+                    f"  - 🌙 晚上: 寻访当地大众点评黑珍珠/必吃榜地道餐厅，体验夜市烟火",
+                ])
+
+        tips_pool = [
+            "携带轻便舒适的运动鞋，城市漫步平均每日步数约 15,000+ 步；",
+            "随身备好晴雨伞，岭南天气多变，遮阳防雨两相宜；",
+            "建议提前在微信/支付宝小程序中绑定“广州公共交通乘车码”，扫码直接搭乘地铁APM线与公交；",
+            "广东省博物馆与广州塔观光门票建议提前 3~7 天在官方公众号实名预约；",
+            "早茶通常在上午 9:00~11:00 为高峰期，错峰就餐体验更舒适。",
+        ]
+        chosen_tips = random.sample(tips_pool, 3)
 
         plan.extend([
             "--------------------------------------------------",
-            "🎒 行前准备建议：",
-            "1. 携带轻便舒适的运动鞋，城市漫步步数较多；",
-            "2. 随身携带充电宝、雨伞及学生证（部分景区可享半价门票）；",
-            "3. 建议提前在手机小程序中绑定当地公共交通乘车码。",
-        ])
+            "🎒 行前实用小贴士：",
+        ] + [f"{i}. {tip}" for i, tip in enumerate(chosen_tips, start=1)])
 
         return ToolCallResult.text("\n".join(plan))

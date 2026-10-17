@@ -126,6 +126,22 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(200, {"history": history})
             return
 
+        elif path == "/api/config":
+            client = AgentServiceHolder.llm_client
+            has_key = bool(client.api_key and len(client.api_key.strip()) > 5)
+            masked = ""
+            if has_key:
+                k = client.api_key.strip()
+                masked = k[:3] + "..." + k[-4:] if len(k) > 7 else "***"
+            self._send_json(200, {
+                "api_base": client.api_base,
+                "model": client.model,
+                "has_key": has_key,
+                "masked_key": masked,
+                "engine_mode": "online_llm" if has_key else "local_fallback",
+            })
+            return
+
         # 默认回退到静态资源托管
         return super().do_GET()
 
@@ -153,6 +169,30 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(200, res.to_dict())
             except Exception as e:
                 self._send_json(500, {"error": f"Agent 执行异常: {str(e)}"})
+            return
+
+        elif path == "/api/config":
+            api_key = payload.get("api_key")
+            api_base = payload.get("api_base")
+            model = payload.get("model")
+            client = AgentServiceHolder.llm_client
+
+            if api_key is not None:
+                client.api_key = api_key.strip()
+            if api_base:
+                client.api_base = api_base.strip().rstrip("/")
+            if model:
+                client.model = model.strip()
+
+            has_key = bool(client.api_key and len(client.api_key.strip()) > 5)
+            engine_mode = "online_llm" if has_key else "local_fallback"
+            self._send_json(200, {
+                "status": "success",
+                "message": "大模型与 API 配置已生效！" if has_key else "已切换为本地离线智能兜底引擎。",
+                "engine_mode": engine_mode,
+                "model": client.model,
+                "api_base": client.api_base,
+            })
             return
 
         elif path == "/api/clear":

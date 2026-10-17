@@ -36,11 +36,17 @@ class LLMClient:
         # 如果配置了有效 API Key，则尝试通过 HTTP 请求大模型 API
         if self.api_key and len(self.api_key.strip()) > 5:
             try:
+                logger.info(f"正在调用在线大模型 API: {self.model} @ {self.api_base}...")
                 return self._call_remote_api(messages, tools)
             except Exception as e:
                 logger.warning(f"远程大模型 API 调用失败 ({e})，降级回退至本地离线智能推理引擎。")
+                fallback_res = self._local_semantic_engine(messages, tools)
+                # 若上一条是最终回答，在回复头部做个友好降级提示
+                if not fallback_res.get("tool_calls"):
+                    fallback_res["content"] = f"> ⚠️ [提示] 在线大模型 API 调用异常 ({e})，系统已自动平滑降级至本地离线规则引擎。\n\n" + fallback_res["content"]
+                return fallback_res
 
-        # 默认或降级：使用内置语义规则与意图规划引擎
+        # 默认无 API Key 场景：直接使用内置语义规则与意图规划引擎
         return self._local_semantic_engine(messages, tools)
 
     def _call_remote_api(
@@ -53,7 +59,7 @@ class LLMClient:
         payload: Dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.3,
+            "temperature": 0.7,
         }
         if tools:
             payload["tools"] = tools
@@ -62,16 +68,22 @@ class LLMClient:
         data = json.dumps(payload).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
+            "Authorization": f"Bearer {self.api_key.strip()}",
             "User-Agent": "SmartAgent/1.0",
         }
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=30.0) as resp:
-            resp_body = resp.read().decode("utf-8")
-            result = json.loads(resp_body)
-            choice = result["choices"][0]["message"]
-            return choice
+        try:
+            with urllib.request.urlopen(req, timeout=35.0) as resp:
+                resp_body = resp.read().decode("utf-8")
+                result = json.loads(resp_body)
+                choice = result["choices"][0]["message"]
+                return choice
+        except urllib.error.HTTPError as he:
+            err_msg = he.read().decode("utf-8", errors="ignore")
+            raise RuntimeError(f"HTTP {he.code}: {err_msg[:200]}")
+        except Exception as e:
+            raise RuntimeError(f"连接大模型服务超时或异常: {str(e)}")
 
     def _local_semantic_engine(
         self,

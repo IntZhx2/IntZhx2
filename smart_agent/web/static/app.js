@@ -18,11 +18,165 @@ document.addEventListener("DOMContentLoaded", () => {
   const quickTodoInput = document.getElementById("quick-todo-input");
   const quickTodoBtn = document.getElementById("quick-todo-btn");
 
+  // 设置模态弹窗元素
+  const btnOpenSettings = document.getElementById("btn-open-settings");
+  const btnCloseSettings = document.getElementById("btn-close-settings");
+  const settingsModal = document.getElementById("settings-modal");
+  const cfgApiBase = document.getElementById("cfg-api-base");
+  const cfgApiKey = document.getElementById("cfg-api-key");
+  const cfgModel = document.getElementById("cfg-model");
+  const btnSaveSettings = document.getElementById("btn-save-settings");
+  const btnSwitchOffline = document.getElementById("btn-switch-offline");
+  const statusModeText = document.getElementById("status-mode-text");
+  const currentModeBadge = document.getElementById("current-mode-badge");
+
   let currentFilter = "all";
+
+  // 服务商预设配置字典
+  const PROVIDER_PRESETS = {
+    bailian: {
+      base: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      model: "qwen-plus",
+      hint: "阿里云百炼 (通义千问) 兼容接口",
+    },
+    deepseek: {
+      base: "https://api.deepseek.com/v1",
+      model: "deepseek-chat",
+      hint: "DeepSeek 官方 API",
+    },
+    silicon: {
+      base: "https://api.siliconflow.cn/v1",
+      model: "Qwen/Qwen2.5-7B-Instruct",
+      hint: "硅基流动免费/普惠模型接口",
+    },
+    zhipu: {
+      base: "https://open.bigmodel.cn/api/paas/v4",
+      model: "glm-4-flash",
+      hint: "智谱清言免费开放模型",
+    },
+    openai: {
+      base: "https://api.openai.com/v1",
+      model: "gpt-4o-mini",
+      hint: "OpenAI 官方 API",
+    },
+    ollama: {
+      base: "http://localhost:11434/v1",
+      model: "qwen2.5:7b",
+      hint: "本地私有化 Ollama 部署",
+    },
+  };
 
   // 1. 初始化加载
   loadTools();
   loadTodos();
+  loadConfig();
+
+  // 设置模态弹窗绑定
+  if (btnOpenSettings) {
+    btnOpenSettings.addEventListener("click", () => {
+      loadConfig();
+      settingsModal.classList.add("active");
+    });
+  }
+
+  if (btnCloseSettings) {
+    btnCloseSettings.addEventListener("click", () => {
+      settingsModal.classList.remove("active");
+    });
+  }
+
+  settingsModal.addEventListener("click", (e) => {
+    if (e.target === settingsModal) {
+      settingsModal.classList.remove("active");
+    }
+  });
+
+  // 服务商预设按钮切换
+  document.querySelectorAll(".provider-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      document.querySelectorAll(".provider-chip").forEach((c) => c.classList.remove("active"));
+      chip.classList.add("active");
+      const provider = chip.dataset.provider;
+      const preset = PROVIDER_PRESETS[provider];
+      if (preset) {
+        cfgApiBase.value = preset.base;
+        cfgModel.value = preset.model;
+      }
+    });
+  });
+
+  // 保存模型配置
+  if (btnSaveSettings) {
+    btnSaveSettings.addEventListener("click", async () => {
+      const apiKey = cfgApiKey.value.trim();
+      const apiBase = cfgApiBase.value.trim();
+      const model = cfgModel.value.trim();
+
+      if (!apiKey) {
+        alert("请输入有效的 API Key！若需在离线模式下运行，可点击“切换为本地离线模式”。");
+        return;
+      }
+
+      btnSaveSettings.disabled = true;
+      btnSaveSettings.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在应用配置...';
+
+      try {
+        const resp = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: apiKey, api_base: apiBase, model: model }),
+        });
+        const data = await resp.json();
+        alert("配置成功！" + data.message);
+        settingsModal.classList.remove("active");
+        loadConfig();
+      } catch (e) {
+        alert("保存配置失败: " + e.message);
+      } finally {
+        btnSaveSettings.disabled = false;
+        btnSaveSettings.innerHTML = '<i class="fa-solid fa-check"></i> 保存并启用在线大模型';
+      }
+    });
+  }
+
+  // 切换为本地离线模式
+  if (btnSwitchOffline) {
+    btnSwitchOffline.addEventListener("click", async () => {
+      try {
+        const resp = await fetch("/api/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ api_key: "", api_base: cfgApiBase.value, model: cfgModel.value }),
+        });
+        const data = await resp.json();
+        cfgApiKey.value = "";
+        alert("已切换为本地离线规则引擎！");
+        settingsModal.classList.remove("active");
+        loadConfig();
+      } catch (e) {
+        alert("切换失败: " + e.message);
+      }
+    });
+  }
+
+  async function loadConfig() {
+    try {
+      const resp = await fetch("/api/config");
+      const data = await resp.json();
+      if (cfgApiBase) cfgApiBase.value = data.api_base || "https://dashscope.aliyuncs.com/compatible-mode/v1";
+      if (cfgModel) cfgModel.value = data.model || "qwen-plus";
+
+      if (data.has_key) {
+        if (statusModeText) statusModeText.innerHTML = `在线大模型 (${data.model})`;
+        if (currentModeBadge) currentModeBadge.innerHTML = `<span style="color: var(--accent-green)">🟢 在线大模型模式 (${data.model}, Key: ${data.masked_key})</span>`;
+      } else {
+        if (statusModeText) statusModeText.innerHTML = `本地离线引擎`;
+        if (currentModeBadge) currentModeBadge.innerHTML = `<span style="color: var(--accent-amber)">🟡 本地离线规则引擎（免 Key 极速模式）</span>`;
+      }
+    } catch (e) {
+      console.warn("加载模型配置失败", e);
+    }
+  }
 
   // 2. 侧边栏选项卡切换
   document.querySelectorAll(".tab-btn").forEach((btn) => {

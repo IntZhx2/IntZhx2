@@ -37,3 +37,13 @@
   - 任务耗时：[PSP 2.1 记录表](pair_project/docs/PSP.md)
   - 效能报告：[性能分析与优化](pair_project/docs/performance.md)
 
+- [三人团队项目 - 能说会做的多功能智能体（SmartAgent）](smart_agent/README.md)
+  - 成员：赵海翔（3124004113）、何卓文（3124004132）、吴与同（3124004018）
+  - 协议标准：Model Context Protocol (MCP) 标准 JSON-RPC 2.0 实现
+  - 核心模块：`core.py` (ReAct 循环)、`memory.py` (滑动窗口记忆)、`mcp/` (Server/Client)、`tools/` (SQLite待办/天气/文件/计算)
+  - 交互界面：现代响应式 Web UI + Web Speech API 语音录入 (STT) 与 朗读 (TTS)
+  - 测试套件：18 项全通过自动化测试 `tests/`
+  - 团队博客：[完整作业随笔博文](smart_agent/BLOG.md)
+  - 架构白皮书：[MCP 架构设计与规范](smart_agent/docs/architecture.md)
+  - 任务耗时：[三人 PSP 2.1 记录表](smart_agent/docs/PSP.md)
+

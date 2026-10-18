@@ -37,12 +37,13 @@
   - 任务耗时：[PSP 2.1 记录表](pair_project/docs/PSP.md)
   - 效能报告：[性能分析与优化](pair_project/docs/performance.md)
 
-- [三人团队项目 - 能说会做的多功能智能体（SmartAgent）](smart_agent/README.md)
+- [三人团队项目 - 能说会做的一条龙旅游规划智能体（SmartTravelAgent）](smart_agent/README.md)
   - 成员：赵海翔（3124004113）、何卓文（3124004132）、吴与同（3124004018）
   - 协议标准：Model Context Protocol (MCP) 标准 JSON-RPC 2.0 实现
-  - 核心模块：`core.py` (ReAct 循环)、`memory.py` (滑动窗口记忆)、`mcp/` (Server/Client)、`tools/` (SQLite待办/天气/文件/计算)
-  - 交互界面：现代响应式 Web UI + Web Speech API 语音录入 (STT) 与 朗读 (TTS)
-  - 测试套件：18 项全通过自动化测试 `tests/`
+  - 核心功能：基于时间约束逆推、交通换乘与周边美食挖掘的一条龙旅游攻略规划，支持真实大模型 API 强制接入
+  - 核心模块：`core.py` (ReAct 循环)、`memory.py` (滑动窗口记忆)、`mcp/` (Server/Client)、`tools/` (天气/交通路网/景点老字号美食/行程归档)
+  - 交互界面：白底与莫兰迪色系现代响应式 Web UI + Web Speech API 语音录入 (STT) 与 朗读 (TTS)
+  - 测试套件：19 项全通过自动化测试 `tests/`
   - 团队博客：[完整作业随笔博文](smart_agent/BLOG.md)
   - 架构白皮书：[MCP 架构设计与规范](smart_agent/docs/architecture.md)
   - 任务耗时：[三人 PSP 2.1 记录表](smart_agent/docs/PSP.md)

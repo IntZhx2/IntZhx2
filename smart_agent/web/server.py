@@ -1,6 +1,6 @@
 """
-轻量高性能 Web 服务端 (Web HTTP & REST Server)
-纯原生 Python 标准库实现，零第三方依赖，提供完整的 Agent 交互 API 与静态资源托管。
+智能旅游规划 Agent Web 服务端 (Web HTTP & REST Server)
+原生 Python 标准库实现，提供旅游定制交互 API、MCP 规范分发及历史攻略归档托管。
 """
 
 import http.server
@@ -9,14 +9,13 @@ import logging
 import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, Optional
-from smart_agent.config import SERVER_HOST, SERVER_PORT, BASE_DIR
+from smart_agent.config import SERVER_HOST, SERVER_PORT, BASE_DIR, WORKSPACE_DIR
 from smart_agent.mcp.server import MCPServer
 from smart_agent.mcp.client import MCPClient
 from smart_agent.agent.memory import ConversationMemory
 from smart_agent.agent.llm_client import LLMClient
 from smart_agent.agent.core import SmartAgent
 from smart_agent.tools import create_default_tools
-from smart_agent.tools.todo_tool import _db_manager
 
 logger = logging.getLogger("web.server")
 STATIC_DIR = BASE_DIR / "web" / "static"
@@ -32,13 +31,13 @@ class AgentServiceHolder:
 
     @classmethod
     def initialize(cls):
-        cls.mcp_server = MCPServer(name="SmartAgent-Web-Server")
+        cls.mcp_server = MCPServer(name="SmartAgent-Travel-Server")
         for tool in create_default_tools():
             cls.mcp_server.register_tool(tool)
 
         cls.mcp_client = MCPClient(cls.mcp_server)
         cls.llm_client = LLMClient()
-        cls.memory = ConversationMemory(session_id="web_default")
+        cls.memory = ConversationMemory(session_id="travel_web_session")
         cls.agent = SmartAgent(
             memory=cls.memory,
             mcp_client=cls.mcp_client,
@@ -53,7 +52,6 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
     def log_message(self, format, *args):
-        # 简化控制台请求日志
         pass
 
     def _send_json(self, status_code: int, data: Any):
@@ -92,43 +90,23 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         elif path == "/api/status":
             tools = AgentServiceHolder.mcp_client.get_tools()
+            has_key = AgentServiceHolder.llm_client.has_valid_key()
             self._send_json(200, {
-                "status": "online",
-                "server": "SmartAgent-Web-Server",
-                "tools_count": len(tools),
+                "status": "ready" if has_key else "need_api_key",
+                "has_key": has_key,
                 "model": AgentServiceHolder.llm_client.model,
+                "tools_count": len(tools),
                 "team": [
                     {"name": "赵海翔", "id": "3124004113", "role": "架构设计与智能体内核"},
-                    {"name": "何卓文", "id": "3124004132", "role": "MCP 服务端与工具生态"},
-                    {"name": "吴与同", "id": "3124004018", "role": "Web 交互与多模态语音工程"},
+                    {"name": "何卓文", "id": "3124004132", "role": "MCP 服务端与旅游工具生态"},
+                    {"name": "吴与同", "id": "3124004018", "role": "莫兰迪响应式 UI 与语音交互"},
                 ]
             })
             return
 
-        elif path == "/api/tools":
-            tools = [t.to_dict() for t in AgentServiceHolder.mcp_client.get_tools()]
-            self._send_json(200, {"tools": tools})
-            return
-
-        elif path == "/api/todos":
-            try:
-                with _db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("SELECT * FROM todos ORDER BY CASE priority WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END, id DESC")
-                    rows = [dict(r) for r in cursor.fetchall()]
-                self._send_json(200, {"todos": rows})
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
-            return
-
-        elif path == "/api/history":
-            history = AgentServiceHolder.memory.get_history_summary()
-            self._send_json(200, {"history": history})
-            return
-
         elif path == "/api/config":
             client = AgentServiceHolder.llm_client
-            has_key = bool(client.api_key and len(client.api_key.strip()) > 5)
+            has_key = client.has_valid_key()
             masked = ""
             if has_key:
                 k = client.api_key.strip()
@@ -138,8 +116,31 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 "model": client.model,
                 "has_key": has_key,
                 "masked_key": masked,
-                "engine_mode": "online_llm" if has_key else "local_fallback",
             })
+            return
+
+        elif path == "/api/tools":
+            tools = [t.to_dict() for t in AgentServiceHolder.mcp_client.get_tools()]
+            self._send_json(200, {"tools": tools})
+            return
+
+        elif path == "/api/itineraries":
+            try:
+                files = list(WORKSPACE_DIR.glob("*.md")) + list(WORKSPACE_DIR.glob("*.txt"))
+                result = []
+                import time
+                for f in sorted(files, key=lambda p: p.stat().st_mtime, reverse=True):
+                    mtime = time.strftime("%Y-%m-%d %H:%M", time.localtime(f.stat().st_mtime))
+                    size_kb = round(f.stat().st_size / 1024, 1)
+                    result.append({"filename": f.name, "size": f"{size_kb} KB", "updated_at": mtime})
+                self._send_json(200, {"itineraries": result})
+            except Exception as e:
+                self._send_json(500, {"error": str(e)})
+            return
+
+        elif path == "/api/history":
+            history = AgentServiceHolder.memory.get_history_summary()
+            self._send_json(200, {"history": history})
             return
 
         # 默认回退到静态资源托管
@@ -161,14 +162,14 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         if path == "/api/chat":
             message = payload.get("message", "").strip()
             if not message:
-                self._send_json(400, {"error": "message 不能为空"})
+                self._send_json(400, {"error": "出行需求描述 message 不能为空"})
                 return
 
             try:
                 res = AgentServiceHolder.agent.run(message)
                 self._send_json(200, res.to_dict())
             except Exception as e:
-                self._send_json(500, {"error": f"Agent 执行异常: {str(e)}"})
+                self._send_json(400, {"error": str(e)})
             return
 
         elif path == "/api/config":
@@ -184,12 +185,15 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             if model:
                 client.model = model.strip()
 
-            has_key = bool(client.api_key and len(client.api_key.strip()) > 5)
-            engine_mode = "online_llm" if has_key else "local_fallback"
+            has_key = client.has_valid_key()
+            if not has_key:
+                self._send_json(400, {"error": "API Key 格式无效或过短，请检查填写的密钥"})
+                return
+
             self._send_json(200, {
                 "status": "success",
-                "message": "大模型与 API 配置已生效！" if has_key else "已切换为本地离线智能兜底引擎。",
-                "engine_mode": engine_mode,
+                "message": f"大模型配置成功！已连接 {client.model}",
+                "has_key": True,
                 "model": client.model,
                 "api_base": client.api_base,
             })
@@ -197,95 +201,24 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
         elif path == "/api/clear":
             AgentServiceHolder.memory.clear()
-            self._send_json(200, {"status": "cleared", "message": "会话历史已清空"})
-            return
-
-        elif path == "/api/todos":
-            title = payload.get("title", "").strip()
-            priority = payload.get("priority", "medium")
-            category = payload.get("category", "general")
-            due_date = payload.get("due_date", "")
-
-            if not title:
-                self._send_json(400, {"error": "title 不能为空"})
-                return
-
-            try:
-                with _db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute(
-                        "INSERT INTO todos (title, priority, category, due_date, status) VALUES (?, ?, ?, ?, 'pending')",
-                        (title, priority, category, due_date),
-                    )
-                    conn.commit()
-                    new_id = cursor.lastrowid
-                self._send_json(200, {"status": "created", "id": new_id})
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
-            return
-
-        self._send_json(404, {"error": "Not Found"})
-
-    def do_PATCH(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        if path.startswith("/api/todos/"):
-            try:
-                task_id = int(path.split("/")[-1])
-            except ValueError:
-                self._send_json(400, {"error": "无效的 task_id"})
-                return
-
-            content_length = int(self.headers.get("Content-Length", 0))
-            payload = json.loads(self.rfile.read(content_length).decode("utf-8"))
-            new_status = payload.get("status", "completed")
-
-            try:
-                with _db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE todos SET status = ? WHERE id = ?", (new_status, task_id))
-                    conn.commit()
-                self._send_json(200, {"status": "updated", "id": task_id, "new_status": new_status})
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
-            return
-
-        self._send_json(404, {"error": "Not Found"})
-
-    def do_DELETE(self):
-        parsed = urllib.parse.urlparse(self.path)
-        path = parsed.path
-        if path.startswith("/api/todos/"):
-            try:
-                task_id = int(path.split("/")[-1])
-            except ValueError:
-                self._send_json(400, {"error": "无效的 task_id"})
-                return
-
-            try:
-                with _db_manager.get_connection() as conn:
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM todos WHERE id = ?", (task_id,))
-                    conn.commit()
-                self._send_json(200, {"status": "deleted", "id": task_id})
-            except Exception as e:
-                self._send_json(500, {"error": str(e)})
+            self._send_json(200, {"status": "cleared", "message": "行程会话上下文已重置"})
             return
 
         self._send_json(404, {"error": "Not Found"})
 
 
 def run_server(host: str = SERVER_HOST, port: int = SERVER_PORT):
-    """启动轻量 HTTP 智能体交互服务器"""
+    """启动轻量 HTTP 旅游智能体服务器"""
     AgentServiceHolder.initialize()
     server_address = (host, port)
     httpd = http.server.ThreadingHTTPServer(server_address, SmartAgentHTTPRequestHandler)
     print("=" * 65)
-    print(f"🚀 SmartAgent 智能体 Web 服务已启动！")
-    print(f"👉 本地访问地址: http://{host}:{port}")
-    print(f"👥 开发团队: 赵海翔 (3124004113) 何卓文 (3124004132) 吴与同 (3124004018)")
-    print(f"🛠️ 已注册 MCP 工具: {len(AgentServiceHolder.mcp_client.get_tools())} 个")
-    print(f"💡 加分项就绪: 多轮对话记忆 | 语音输入输出 (STT/TTS) | SQLite 数据库 | Web 交互端")
+    print(f"🌍 SmartAgent 智能旅游规划系统已启动！")
+    print(f"👉 访问地址: http://{host}:{port}")
+    print(f"👥 开发团队: 赵海翔 (3124004113) · 何卓文 (3124004132) · 吴与同 (3124004018)")
+    print(f"🛠️ 已挂载专用 MCP 旅游工具: {len(AgentServiceHolder.mcp_client.get_tools())} 个")
+    print(f"🎨 UI 风格: 极简白底 + 莫兰迪自然色系 (Morandi Aesthetic)")
+    print(f"🔒 模式规范: 强制接入真实在线大模型 API (通义千问/DeepSeek/智谱/OpenAI)")
     print("=" * 65)
     try:
         httpd.serve_forever()

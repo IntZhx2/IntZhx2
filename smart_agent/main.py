@@ -49,7 +49,15 @@ def run_cli_mode():
     memory = ConversationMemory(session_id="cli_session")
     agent = SmartAgent(memory=memory, mcp_client=mcp_client, llm_client=llm_client)
 
-    print(f"🛠️ 已成功就绪 {len(mcp_client.get_tools())} 个 MCP 标准工具！\n")
+    print(f"🛠️ 已成功就绪 {len(mcp_client.get_tools())} 个 MCP 旅游专属工具！")
+    if not llm_client.has_valid_key():
+        print("⚠️  当前未配置大模型 API Key（系统已关闭伪离线模式，必须接入真实大模型）。")
+        prompt_key = input("👉 请输入您的大模型 API Key (如阿里云百炼/DeepSeek sk-xxx): ").strip()
+        if prompt_key:
+            llm_client.api_key = prompt_key
+            print("✅ API Key 已设定！\n")
+        else:
+            print("❌ 未提供 API Key，您也可以通过 --web 在网页端进行可视化配置。\n")
 
     while True:
         try:

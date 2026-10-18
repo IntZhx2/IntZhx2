@@ -1,16 +1,15 @@
 """
-Web 服务与 REST API 单元测试 (基于内存 Mock 隔离，零端口与网络依赖)
+旅游规划 Web 服务与 REST API 单元测试 (基于内存 Mock 隔离)
 """
 
 import unittest
 import json
 from io import BytesIO
 from smart_agent.web.server import SmartAgentHTTPRequestHandler, AgentServiceHolder
-from smart_agent.tools.todo_tool import _db_manager
+from smart_agent.config import WORKSPACE_DIR
 
 
 class MockHTTPConnection:
-    """基于内存 BytesIO 的 HTTP 传输流模拟器"""
     def __init__(self, request_bytes: bytes):
         self.rfile = BytesIO(request_bytes)
         self.wfile = BytesIO()
@@ -20,14 +19,13 @@ class MockHTTPConnection:
             if "r" in mode:
                 return self.rfile
             return self.wfile
-        raise ValueError("Only binary mode is supported")
+        raise ValueError("Only binary mode supported")
 
     def sendall(self, data):
         self.wfile.write(data)
 
 
 def simulate_http_request(method: str, path: str, body: dict = None) -> tuple:
-    """模拟单次完整的 HTTP 请求与响应解析"""
     body_bytes = json.dumps(body).encode("utf-8") if body else b""
     headers = [
         f"{method} {path} HTTP/1.1",
@@ -40,16 +38,12 @@ def simulate_http_request(method: str, path: str, body: dict = None) -> tuple:
     raw_req = "\r\n".join(headers).encode("utf-8") + body_bytes
     mock_conn = MockHTTPConnection(raw_req)
 
-    # 实例化并执行 Handler
     handler = SmartAgentHTTPRequestHandler(mock_conn, ("127.0.0.1", 8000), None)
 
-    # 解析响应
     resp_raw = mock_conn.wfile.getvalue().decode("utf-8", errors="ignore")
     lines = resp_raw.split("\r\n")
-    status_line = lines[0]
-    status_code = int(status_line.split(" ")[1])
+    status_code = int(lines[0].split(" ")[1])
 
-    # 寻找空行提取 JSON 正文
     empty_idx = -1
     for i, line in enumerate(lines):
         if line == "":
@@ -61,72 +55,64 @@ def simulate_http_request(method: str, path: str, body: dict = None) -> tuple:
     return status_code, parsed_json
 
 
-class TestWebServerAndAPI(unittest.TestCase):
+class TestTravelWebServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         AgentServiceHolder.initialize()
 
-    def setUp(self):
-        with _db_manager.get_connection() as conn:
-            conn.execute("DELETE FROM todos")
-            conn.commit()
-
     def test_status_endpoint(self):
         status, data = simulate_http_request("GET", "/api/status")
         self.assertEqual(status, 200)
-        self.assertEqual(data["status"], "online")
+        self.assertIn("status", data)
         self.assertEqual(len(data["team"]), 3)
 
-    def test_tools_endpoint(self):
+    def test_travel_tools_endpoint(self):
         status, data = simulate_http_request("GET", "/api/tools")
         self.assertEqual(status, 200)
         tools = data["tools"]
-        self.assertGreater(len(tools), 5)
         names = [t["name"] for t in tools]
-        self.assertIn("todo_add", names)
         self.assertIn("weather_query", names)
-        self.assertIn("calculate", names)
+        self.assertIn("traffic_transit", names)
+        self.assertIn("attraction_info", names)
+        self.assertIn("itinerary_save", names)
 
-    def test_todos_crud_api(self):
-        # 1. POST 添加
-        status, res = simulate_http_request("POST", "/api/todos", {
-            "title": "测试待办项目",
-            "priority": "high",
-            "category": "study"
+    def test_config_api(self):
+        # 1. 验证 GET /api/config
+        status, cfg = simulate_http_request("GET", "/api/config")
+        self.assertEqual(status, 200)
+        self.assertIn("has_key", cfg)
+
+        # 2. 验证 POST /api/config 配置 Key
+        status, post_res = simulate_http_request("POST", "/api/config", {
+            "api_key": "sk-test-valid-user-key-654321",
+            "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "model": "qwen-plus"
         })
         self.assertEqual(status, 200)
-        task_id = res["id"]
+        self.assertTrue(post_res["has_key"])
 
-        # 2. GET 列表
-        status, res = simulate_http_request("GET", "/api/todos")
-        self.assertEqual(status, 200)
-        self.assertEqual(len(res["todos"]), 1)
-        self.assertEqual(res["todos"][0]["title"], "测试待办项目")
-
-        # 3. PATCH 更新
-        status, res = simulate_http_request("PATCH", f"/api/todos/{task_id}", {"status": "completed"})
-        self.assertEqual(status, 200)
-        self.assertEqual(res["new_status"], "completed")
-
-        # 4. DELETE 删除
-        status, res = simulate_http_request("DELETE", f"/api/todos/{task_id}")
-        self.assertEqual(status, 200)
-        self.assertEqual(res["status"], "deleted")
-
-    def test_chat_and_tool_execution(self):
-        # 测试 /api/chat 发送自然语言指令
+    def test_chat_without_api_key(self):
+        # 将 Key 置空
+        AgentServiceHolder.llm_client.api_key = ""
         status, data = simulate_http_request("POST", "/api/chat", {
-            "message": "添加任务：提交软件工程博客，优先级高"
+            "message": "帮我规划广州2日游，周六下午3点必须到广州塔"
         })
-        self.assertEqual(status, 200)
-        self.assertIn("answer", data)
-        self.assertGreater(len(data["traces"]), 0)
+        self.assertEqual(status, 400)
+        self.assertIn("未配置大模型 API Key", data["error"])
 
-        # 验证数据库中确实产生了任务
-        status, res = simulate_http_request("GET", "/api/todos")
+    def test_itineraries_list_api(self):
+        # 保存一份测试文档
+        test_file = WORKSPACE_DIR / "test_api_travel.md"
+        with open(test_file, "w", encoding="utf-8") as f:
+            f.write("# 广州2日游一条龙方案\n测试内容")
+
+        status, data = simulate_http_request("GET", "/api/itineraries")
         self.assertEqual(status, 200)
-        self.assertEqual(len(res["todos"]), 1)
-        self.assertIn("提交软件工程博客", res["todos"][0]["title"])
+        filenames = [item["filename"] for item in data["itineraries"]]
+        self.assertIn("test_api_travel.md", filenames)
+
+        if test_file.exists():
+            test_file.unlink()
 
 
 if __name__ == "__main__":

@@ -3,244 +3,271 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SmartAgent - 能说会做的多功能智能体 (MCP 架构)</title>
+  <title>TravelAgent · 智行一条龙旅游规划智能体 (MCP 驱动)</title>
   <link rel="stylesheet" href="/style.css" />
-  <!-- FontAwesome & Google Fonts -->
+  <!-- FontAwesome 图标库 & 优雅字体 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-  <div class="app-container">
+  <div class="app-layout">
     <!-- 顶部导航栏 -->
-    <header class="app-header">
-      <div class="header-left">
-        <div class="logo-icon">
-          <i class="fa-solid fa-robot"></i>
+    <header class="navbar">
+      <div class="navbar-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-compass"></i>
         </div>
-        <div class="header-titles">
-          <h1>SmartAgent <span class="badge-mcp">MCP v1.0</span></h1>
-          <p class="subtitle">具备自然语言交互（能说）与工具执行（会做）能力的综合智能体</p>
+        <div class="brand-text">
+          <h1>TravelAgent <span class="brand-tag">智游专属版</span></h1>
+          <p class="brand-sub">景点 · 交通 · 美食 · 严格时间约束一条龙深度定制</p>
         </div>
       </div>
 
-      <div class="header-team">
-        <div class="team-badge" title="团队成员与分工">
-          <i class="fa-solid fa-users"></i>
+      <div class="navbar-center">
+        <div class="team-tag" title="广东工业大学 24 计科 6班">
+          <i class="fa-solid fa-user-group"></i>
           <span>赵海翔 (3124004113) · 何卓文 (3124004132) · 吴与同 (3124004018)</span>
         </div>
       </div>
 
-      <div class="header-right">
-        <div class="status-indicator online" id="server-status" title="当前引擎模式">
-          <span class="dot"></span>
-          <span class="status-text" id="status-mode-text">本地离线引擎</span>
+      <div class="navbar-actions">
+        <div class="status-pill" id="agent-status-pill">
+          <span class="status-circle"></span>
+          <span class="status-label" id="status-label">正在检查 API 状态...</span>
         </div>
-        <button class="icon-btn" id="btn-open-settings" title="大模型与 API 配置">
-          <i class="fa-solid fa-gear"></i>
+
+        <button class="nav-btn primary" id="btn-open-config" title="配置大模型 API Key">
+          <i class="fa-solid fa-key"></i> <span>API 配置</span>
         </button>
-        <button class="icon-btn" id="btn-toggle-tts" title="自动语音朗读开/关">
+
+        <button class="nav-btn icon-only" id="btn-toggle-tts" title="智能语音朗读开关">
           <i class="fa-solid fa-volume-high"></i>
         </button>
-        <button class="icon-btn danger" id="btn-clear-chat" title="清空会话记忆">
-          <i class="fa-solid fa-trash-can"></i>
+
+        <button class="nav-btn icon-only" id="btn-clear-chat" title="清空会话上下文">
+          <i class="fa-solid fa-arrow-rotate-left"></i>
         </button>
       </div>
     </header>
 
-    <!-- 主体区域 -->
-    <div class="app-body">
-      <!-- 左侧边栏：MCP 工具与 SQLite 待办看板 -->
+    <!-- 主体容器 -->
+    <div class="workspace">
+      <!-- 左侧边栏：出行定制向导与已保存攻略 -->
       <aside class="sidebar">
-        <!-- 选项卡切换 -->
-        <div class="sidebar-tabs">
-          <button class="tab-btn active" data-tab="todos">
-            <i class="fa-solid fa-list-check"></i> 待办数据库
-          </button>
-          <button class="tab-btn" data-tab="tools">
-            <i class="fa-solid fa-screwdriver-wrench"></i> MCP 工具
-          </button>
-        </div>
+        <!-- 侧边栏向导表单 -->
+        <div class="sidebar-section">
+          <div class="section-title">
+            <i class="fa-solid fa-sliders"></i>
+            <span>行程要素快捷组合</span>
+          </div>
 
-        <!-- 选项卡 1: SQLite 待办面板 -->
-        <div class="tab-content active" id="tab-todos">
-          <div class="todos-header">
-            <div class="filter-group">
-              <button class="filter-pill active" data-filter="all">全部</button>
-              <button class="filter-pill" data-filter="pending">待办</button>
-              <button class="filter-pill" data-filter="completed">完成</button>
+          <div class="guide-form">
+            <div class="form-item">
+              <label><i class="fa-solid fa-location-dot"></i> 出行目的地：</label>
+              <input type="text" id="guide-city" value="广州" placeholder="如：广州、北京、杭州、成都" />
             </div>
-            <button class="btn-refresh" id="btn-refresh-todos" title="刷新数据库">
-              <i class="fa-solid fa-rotate-right"></i>
+
+            <div class="form-row">
+              <div class="form-item half">
+                <label><i class="fa-solid fa-calendar-days"></i> 天数：</label>
+                <select id="guide-days">
+                  <option value="1天特种兵">1天速览</option>
+                  <option value="2天1夜" selected>2天1夜</option>
+                  <option value="3天2晚深度">3天2晚深度</option>
+                </select>
+              </div>
+              <div class="form-item half">
+                <label><i class="fa-solid fa-train-subway"></i> 交通方式：</label>
+                <select id="guide-transit">
+                  <option value="优先地铁与公共交通" selected>🚇 地铁公交</option>
+                  <option value="打车或网约车出行">🚖 打车/网约车</option>
+                  <option value="自驾租车游览">🚗 租车自驾</option>
+                  <option value="城市漫步Citywalk">🚶 徒步漫游</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-item">
+              <label><i class="fa-solid fa-clock"></i> 必达时间点约束 (核心亮点)：</label>
+              <input type="text" id="guide-constraint" placeholder="如：周六下午3点必须到达广州塔" value="周六下午15:00必须到达广州塔登塔" />
+            </div>
+
+            <div class="form-item">
+              <label><i class="fa-solid fa-utensils"></i> 美食与偏好：</label>
+              <input type="text" id="guide-pref" placeholder="如：地道早茶、老字号粤菜小吃" value="正宗西关早茶、必吃榜特色粤菜" />
+            </div>
+
+            <button class="btn-generate-itinerary" id="btn-quick-generate">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 一键生成一条龙攻略
             </button>
           </div>
+        </div>
 
-          <!-- 快速添加任务输入框 -->
-          <div class="quick-add-box">
-            <input type="text" id="quick-todo-input" placeholder="快速添加任务到 SQLite..." />
-            <button id="quick-todo-btn"><i class="fa-solid fa-plus"></i></button>
+        <!-- 侧边栏：已归档历史攻略 -->
+        <div class="sidebar-section flex-1">
+          <div class="section-title">
+            <i class="fa-solid fa-bookmark"></i>
+            <span>已归档攻略方案</span>
+            <button class="btn-text-action" id="btn-refresh-itineraries" title="刷新文件列表"><i class="fa-solid fa-rotate-right"></i></button>
           </div>
-
-          <div class="todos-list" id="todos-container">
-            <div class="loading-placeholder">正在加载待办数据...</div>
+          <div class="itinerary-list" id="itineraries-container">
+            <div class="empty-state">暂无已归档攻略，生成后可让智能体帮您保存到本地</div>
           </div>
         </div>
 
-        <!-- 选项卡 2: MCP 工具目录 -->
-        <div class="tab-content" id="tab-tools">
-          <div class="tools-info">
-            <p><i class="fa-solid fa-circle-nodes"></i> Model Context Protocol 标准已注册工具：</p>
+        <!-- MCP 工具状态指示 -->
+        <div class="mcp-toolkit-card">
+          <div class="toolkit-header">
+            <span><i class="fa-solid fa-microchip"></i> MCP 旅游专属工具链</span>
           </div>
-          <div class="tools-list" id="tools-container">
-            <div class="loading-placeholder">加载 MCP 工具中...</div>
+          <div class="toolkit-tags">
+            <span class="tool-tag" title="实时查询目的地气温与穿衣指数">weather_query</span>
+            <span class="tool-tag" title="计算起点至终点的换乘与耗时">traffic_transit</span>
+            <span class="tool-tag" title="深度景点门票预约与周边招牌美食">attraction_info</span>
+            <span class="tool-tag" title="保存行程方案至 Markdown 文件">itinerary_save</span>
           </div>
-        </div>
-
-        <!-- 底部加分项状态标识 -->
-        <div class="bonus-features-card">
-          <h4><i class="fa-solid fa-star"></i> 加分项达成清单</h4>
-          <ul>
-            <li class="active"><i class="fa-solid fa-check"></i> 多轮对话记忆系统</li>
-            <li class="active"><i class="fa-solid fa-check"></i> 语音录入 (STT) 与朗读 (TTS)</li>
-            <li class="active"><i class="fa-solid fa-check"></i> SQLite 数据库与天气 API 交互</li>
-            <li class="active"><i class="fa-solid fa-check"></i> 响应式 Web 现代交互前端</li>
-          </ul>
         </div>
       </aside>
 
-      <!-- 右侧：智能体对话主界面 -->
-      <main class="chat-main">
-        <!-- 快捷引导提示词 -->
-        <div class="quick-chips">
-          <span class="chip-label">快捷测试：</span>
-          <button class="chip-btn" data-prompt="帮我添加一条重要待办：完成软件工程大作业架构设计，优先级高">
-            📋 添加待办
+      <!-- 右侧：智能体对话与攻略生成主舞台 -->
+      <main class="chat-viewport">
+        <!-- 灵感快捷点选条 -->
+        <div class="inspiration-bar">
+          <span class="inspiration-title"><i class="fa-regular fa-lightbulb"></i> 灵感示例：</span>
+          <button class="prompt-chip" data-text="我要去广州玩2天，以地铁出行为主，周六下午3点必须在广州塔登塔，请为我制定包含景点、换乘指引和地道美食的一条龙攻略。">
+            📍 广州2日游 (周六15:00广州塔约束)
           </button>
-          <button class="chip-btn" data-prompt="查询广州现在的天气如何，适不适合出门游玩？">
-            🌤️ 广州天气
+          <button class="prompt-chip" data-text="规划一份杭州2天出行方案，自驾出行，周日上午10点必须到达灵隐寺祈福，晚上去西湖看音乐喷泉，推荐必吃杭帮菜。">
+            📍 杭州西湖与灵隐 (周日10:00灵隐寺)
           </button>
-          <button class="chip-btn" data-prompt="规划一份广州2天旅游攻略，偏好岭南历史与西关美食">
-            🗺️ 旅游行程
-          </button>
-          <button class="chip-btn" data-prompt="帮我算一下 (128 * 45) + (360 / 12) 等于多少">
-            🔢 科学计算
-          </button>
-          <button class="chip-btn" data-prompt="查看当前工作区有哪些文件">
-            📁 查看文件
+          <button class="prompt-chip" data-text="成都3天2晚旅游攻略，高铁到达成都东站，要求包含大熊猫繁育基地和宽窄巷子，推荐地道火锅和小吃。">
+            📍 成都休闲漫游 (高铁接驳)
           </button>
         </div>
 
-        <!-- 消息历史滚动区 -->
-        <div class="messages-container" id="messages-container">
-          <!-- 默认欢迎消息 -->
-          <div class="message-row assistant">
-            <div class="avatar"><i class="fa-solid fa-robot"></i></div>
-            <div class="message-content">
-              <div class="bubble">
-                <p>👋 您好！我是 <strong>SmartAgent</strong> 智能助手。</p>
-                <p>本智能体由 <strong>广东工业大学 24 计科 6班三人团队</strong> 联合构建，基于 <strong>Model Context Protocol (MCP)</strong> 架构开发，具备完整的自然语言交互（能说）与工具调用执行（会做）能力：</p>
-                <ul>
-                  <li><strong>待办管家</strong>：管理 SQLite 数据库中的个人日程与优先级；</li>
-                  <li><strong>气象与旅游</strong>：查询实时天气动态，定制出行路线建议；</li>
-                  <li><strong>数学运算</strong>：基于安全沙箱执行无误差算术与科学函数；</li>
-                  <li><strong>文件与办公</strong>：读写与检索工作区中的本地文档；</li>
-                  <li><strong>语音多模态</strong>：支持点击右下角麦克风语音输入与智能朗读。</li>
-                </ul>
-                <p>您可以直接向我下达指令，或点击上方的快捷测试按钮！</p>
+        <!-- 消息历史滚动视窗 -->
+        <div class="chat-stream" id="chat-stream">
+          <!-- 默认欢迎引导 -->
+          <div class="chat-message assistant">
+            <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
+            <div class="msg-bubble">
+              <div class="welcome-banner">
+                <h3>您好！我是您的专属旅游规划智能体 <strong>TravelAgent</strong></h3>
+                <p>基于 <strong>Model Context Protocol (MCP)</strong> 标准协议构建，通过连接在线大模型与专用旅游工具链，为您提供<strong>“景点 + 交通 + 美食”</strong>一条龙闭环定制方案：</p>
+                <div class="welcome-features">
+                  <div class="feat-box">
+                    <i class="fa-solid fa-location-crosshairs"></i>
+                    <h4>严格时间约束</h4>
+                    <p>支持指定“几点必须在什么地方”，精准逆推交通与游览耗时</p>
+                  </div>
+                  <div class="feat-box">
+                    <i class="fa-solid fa-route"></i>
+                    <h4>无缝交通换乘</h4>
+                    <p>按您的出行偏好规划地铁线路、打车耗时与站点避堵贴士</p>
+                  </div>
+                  <div class="feat-box">
+                    <i class="fa-solid fa-bowl-food"></i>
+                    <h4>地道美食打卡</h4>
+                    <p>就近匹配老字号招牌菜品与人均消费，杜绝网红踩坑</p>
+                  </div>
+                </div>
+                <p class="welcome-note">💡 请在右上角配置您的真实大模型 API Key（阿里云百炼、DeepSeek、智谱等），即可立即开始规划！</p>
               </div>
-              <span class="message-time">系统内置</span>
+              <div class="msg-timestamp">TravelAgent 系统就绪</div>
             </div>
           </div>
         </div>
 
-        <!-- 底部输入交互栏 -->
-        <div class="chat-input-area">
-          <div class="input-wrapper">
-            <!-- 语音输入指示动效 -->
-            <div class="voice-indicator" id="voice-indicator">
-              <span class="wave"></span><span class="wave"></span><span class="wave"></span>
-              <span class="voice-text">正在聆听您的指令...</span>
-            </div>
+        <!-- 底部输入交互区域 -->
+        <div class="chat-input-bar">
+          <!-- 正在录音视觉波浪动效 -->
+          <div class="recording-banner" id="recording-banner">
+            <span class="pulse-dot"></span>
+            <span>正在倾听您的出行要求，请说话...</span>
+          </div>
 
+          <div class="input-card">
             <textarea
-              id="user-input"
+              id="chat-textarea"
               rows="2"
-              placeholder="对 SmartAgent 说些什么，或输入需要执行的操作指令（Shift + Enter 换行，Enter 发送）..."
+              placeholder="请输入您的出行计划（例如：目的地、出行天数、交通方式偏好、几点必须在什么地方等）..."
             ></textarea>
 
-            <div class="input-actions">
+            <div class="input-actions-group">
               <!-- 麦克风语音输入按钮 (STT) -->
-              <button class="action-btn mic-btn" id="btn-mic" title="按一下开始语音输入 (Web Speech API)">
+              <button class="btn-action mic" id="btn-mic" title="点击开始语音输入 (Web Speech API)">
                 <i class="fa-solid fa-microphone"></i>
               </button>
               <!-- 发送按钮 -->
-              <button class="action-btn send-btn" id="btn-send" title="发送消息 (Enter)">
+              <button class="btn-action send" id="btn-send" title="发送需求 (Enter)">
                 <i class="fa-solid fa-paper-plane"></i>
               </button>
             </div>
           </div>
-          <div class="input-tips">
-            <span>💡 提示：支持自然语言描述复杂任务，智能体将自动调度 MCP 工具链并生成观察反馈。</span>
+          <div class="input-helper-text">
+            <span>支持自然语言输入任意复杂需求，智能体将自动调用 MCP 气象、路线与景点工具生成时间线攻略</span>
           </div>
         </div>
       </main>
     </div>
   </div>
 
-  <!-- 大模型与 API 设置模态弹窗 -->
-  <div class="modal-overlay" id="settings-modal">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3><i class="fa-solid fa-sliders"></i> 大模型与推理引擎配置</h3>
-        <button class="btn-close-modal" id="btn-close-settings"><i class="fa-solid fa-xmark"></i></button>
+  <!-- 强制 API Key 配置模态弹窗 -->
+  <div class="modal-backdrop" id="config-modal">
+    <div class="modal-card">
+      <div class="modal-title-bar">
+        <h3><i class="fa-solid fa-key"></i> 接入真实在线大语言模型 (强制配置)</h3>
+        <button class="btn-close-modal" id="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
       </div>
-      <div class="modal-body">
-        <p class="modal-desc">
-          SmartAgent 采用<strong>双模引擎</strong>：配置有效 API Key 时将调用在线大模型进行发散式思考与生成；未配置时自动使用内置离线规则引擎进行极速测试。
-        </p>
 
-        <!-- 厂商快捷预设 -->
-        <div class="form-group">
-          <label>快速预设服务商：</label>
-          <div class="provider-chips">
-            <button class="provider-chip active" data-provider="bailian">阿里云百炼 (Qwen)</button>
-            <button class="provider-chip" data-provider="deepseek">DeepSeek 官方</button>
-            <button class="provider-chip" data-provider="silicon">硅基流动 (SiliconFlow)</button>
-            <button class="provider-chip" data-provider="zhipu">智谱 BigModel</button>
-            <button class="provider-chip" data-provider="openai">OpenAI 官方</button>
-            <button class="provider-chip" data-provider="ollama">本地 Ollama</button>
+      <div class="modal-inner">
+        <div class="modal-alert">
+          <i class="fa-solid fa-circle-exclamation"></i>
+          <div>
+            <strong>系统已完全关闭本地伪离线模式</strong>：智能体的思考推理、时间约束求解与一条龙攻略生成全部由真实大模型实时驱动，请先配置 API Key。
           </div>
         </div>
 
-        <div class="form-group">
-          <label for="cfg-api-base">API 端点 (Base URL)：</label>
-          <input type="text" id="cfg-api-base" placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+        <!-- 常用提供商快捷预设 -->
+        <div class="form-field">
+          <label>快速选用服务商：</label>
+          <div class="preset-chips">
+            <button class="preset-pill active" data-preset="bailian">🌟 阿里云百炼 (Qwen 推荐)</button>
+            <button class="preset-pill" data-preset="deepseek">🚀 DeepSeek 官方</button>
+            <button class="preset-pill" data-preset="zhipu">💡 智谱 BigModel (GLM-4-flash)</button>
+            <button class="preset-pill" data-preset="silicon">⚡ 硅基流动</button>
+            <button class="preset-pill" data-preset="openai">🌐 OpenAI</button>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="cfg-api-key">API 密钥 (API Key)：</label>
-          <input type="password" id="cfg-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx" />
-          <span class="field-hint">密钥仅保存在内存及当前服务会话中，绝不外泄。留空则切换为离线规则引擎。</span>
+        <div class="form-field">
+          <label for="input-api-base">API 端点 (Base URL)：</label>
+          <input type="text" id="input-api-base" value="https://dashscope.aliyuncs.com/compatible-mode/v1" />
         </div>
 
-        <div class="form-group">
-          <label for="cfg-model">模型名称 (Model)：</label>
-          <input type="text" id="cfg-model" placeholder="qwen-plus" />
+        <div class="form-field">
+          <label for="input-api-key">API 密钥 (API Key)：<span class="required">*必填</span></label>
+          <input type="password" id="input-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
+          <span class="field-tips">密钥仅保存在内存中，安全可靠。填写后即可体验真实大模型思考。</span>
         </div>
 
-        <div class="modal-status-box" id="modal-status-box">
-          <i class="fa-solid fa-circle-info"></i> 当前模式：<span id="current-mode-badge">检测中...</span>
+        <div class="form-field">
+          <label for="input-model">模型代号 (Model Name)：</label>
+          <input type="text" id="input-model" value="qwen-plus" />
         </div>
       </div>
-      <div class="modal-footer">
-        <button class="btn-secondary" id="btn-switch-offline">切换为本地离线模式</button>
-        <button class="btn-primary" id="btn-save-settings"><i class="fa-solid fa-check"></i> 保存并启用在线大模型</button>
+
+      <div class="modal-actions-bar">
+        <button class="btn-confirm-save" id="btn-save-config">
+          <i class="fa-solid fa-check"></i> 保存并启用真实大模型
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- 引入逻辑脚本 -->
+  <!-- 前端逻辑引入 -->
   <script src="/speech.js"></script>
   <script src="/app.js"></script>
 </body>

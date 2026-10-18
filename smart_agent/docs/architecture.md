@@ -1,169 +1,111 @@
-# SmartAgent 架构设计与协议技术白皮书
+# TravelAgent 架构设计与协议技术白皮书
 
-本文档详细记录 **广东工业大学 24 计科 6班三人团队** 在作业 16760 中构建的 **SmartAgent 智能体系统** 的总体架构、Model Context Protocol (MCP) 规范落地、ReAct 规划循环及多模态交互设计。
+本文档详细记录 **广东工业大学 24 计科 6班三人团队** 构建的 **TravelAgent 智能旅游规划系统** 的总体架构、Model Context Protocol (MCP) 规范落地、ReAct 约束求解循环及莫兰迪白底美学工程设计。
 
 ---
 
 ## 一、 系统总体架构设计
 
-SmartAgent 遵循高内聚、低耦合的分层架构模式，整体自顶向下划分为 **交互表现层 (Web/CLI/Voice)**、**认知决策内核层 (ReAct Agent & Memory)**、**协议分发层 (MCP Client & Server)** 以及 **环境工具服务层 (Database/File/API/Math)**：
+TravelAgent 专注于**旅游定制专属垂直领域**，杜绝无意义的功能杂糅，建立在严密的软件工程分层体系之上：
 
 ```mermaid
 flowchart TB
-    subgraph Layer1["1. 交互表现层 (Presentation Layer)"]
-        WebUI["Web 现代响应式交互界面 (HTML5 / Tailwind / JS)"]
-        CLI["CLI 终端命令行交互端 (main.py)"]
+    subgraph Presentation["1. 交互表现层 (莫兰迪极简白底美学)"]
+        WebUI["响应式单页应用 SPA (莫兰迪低饱和度色系 + 白底为主)"]
+        TravelGuideForm["行程要素快捷组合向导 (地点/天数/交通方式/时间点约束)"]
         VoiceSTT["语音录入 STT (Web Speech API)"]
         VoiceTTS["语音合成 TTS (SpeechSynthesis API)"]
     end
 
-    subgraph Layer2["2. 智能体认知内核层 (Agent Cognitive Layer)"]
-        SmartAgentCore["SmartAgent 核心控制器 (core.py)"]
-        ReActLoop["ReAct 决策循环: Thought -> Action -> Observation -> Answer"]
+    subgraph Cognitive["2. 认知规划内核 (TravelAgent Cognitive Core)"]
+        AgentCore["TravelAgent 核心控制器 (core.py)"]
+        ReActLoop["ReAct 约束求解循环: 用户约束 -> 气象/交通/景点工具调度 -> 归纳一条龙攻略"]
         Memory["多轮对话记忆管理器 (memory.py - 滑动窗口机制)"]
-        LLMEngine["双模推理引擎 (在线 OpenAI 兼容 API / 本地高精度语义规划引擎)"]
+        MandatoryLLM["强制云端大模型引擎 (OpenAI 兼容 / 通义千问 / DeepSeek / 智谱)"]
     end
 
-    subgraph Layer3["3. 协议抽象与分发层 (MCP Protocol Layer)"]
+    subgraph Protocol["3. MCP 协议总线层 (Model Context Protocol)"]
         MCPClient["MCP 客户端适配器 (client.py)"]
         JSONRPC["JSON-RPC 2.0 序列化通道 (protocol.py)"]
-        MCPServer["MCP 服务端路由注册中心 (server.py)"]
+        MCPServer["MCP 服务端路由分发中心 (server.py)"]
     end
 
-    subgraph Layer4["4. 工具执行与外部数据交互层 (Tools & Data Layer)"]
-        TodoTool["待办事项管家 (SQLite 关系型数据库 agent_data.db)"]
-        WeatherTool["实时天气与定制出行攻略 API (weather_query / travel_plan)"]
-        FileTool["沙箱工作区安全文档管理 (file_read / file_write / file_list)"]
-        MathTool["高精度 AST 数学表达式计算器 (calculate)"]
+    subgraph ToolsLayer["4. 旅游专属工具生态层 (Travel Tools Ecosystem)"]
+        WeatherTool["实时天气与穿衣出行防护工具 (weather_query)"]
+        TrafficTool["交通接驳换乘与通勤预估工具 (traffic_transit)"]
+        AttractionTool["景点预约规则与周边老字号美食工具 (attraction_info)"]
+        ItineraryTool["Markdown 攻略归档与导出工具 (itinerary_save / list)"]
     end
 
-    Layer1 --> Layer2
-    SmartAgentCore --> Memory
-    SmartAgentCore --> LLMEngine
-    SmartAgentCore --> MCPClient
+    Presentation --> Cognitive
+    AgentCore --> Memory
+    AgentCore --> MandatoryLLM
+    AgentCore --> MCPClient
     MCPClient <-->|JSON-RPC 2.0| MCPServer
-    MCPServer --> Layer4
+    MCPServer --> ToolsLayer
 ```
 
 ---
 
-## 二、 Model Context Protocol (MCP) 规范落地
+## 二、 核心约束求解与 ReAct 执行时序
 
-本项目全面严格对齐由 Anthropic 发起并在开源社区广泛采用的 **Model Context Protocol (MCP)** 标准规范：
-
-### 1. 协议通信格式（JSON-RPC 2.0）
-所有 MCP 客户端与服务端的请求与响应均封装在标准 JSON-RPC 2.0 帧中：
-
-- **工具探测与发现 (`tools/list`)**：
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "method": "tools/list",
-    "id": "client-init-1"
-  }
-  ```
-  返回格式严格遵循 JSON Schema 定义：
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "id": "client-init-1",
-    "result": {
-      "tools": [
-        {
-          "name": "todo_add",
-          "description": "向待办事项数据库添加一条新任务",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "title": { "type": "string" },
-              "priority": { "type": "string", "enum": ["low", "medium", "high"] }
-            },
-            "required": ["title"]
-          }
-        }
-      ]
-    }
-  }
-  ```
-
-- **工具执行与调度 (`tools/call`)**：
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "method": "tools/call",
-    "params": {
-      "name": "weather_query",
-      "arguments": { "city": "广州" }
-    },
-    "id": "client-call-101"
-  }
-  ```
-  返回标准化内容块 (`content`) 与错误标识 (`isError`)：
-  ```json
-  {
-    "jsonrpc": "2.0",
-    "id": "client-call-101",
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "🌤️ 【广州 实时气象情报】: 气温 24~29℃, 多云转晴, 湿度 68%..."
-        }
-      ],
-      "isError": false
-    }
-  }
-  ```
-
----
-
-## 三、 ReAct (Reasoning + Acting) 执行流程
-
-智能体运行采用经典的 **ReAct 认知规划与行动回路**：
+针对用户提出的【地点】、【交通方式】及【特定时间点必须在什么地方】的复合需求，智能体执行精准的倒推规划：
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as 用户 (User)
-    participant Agent as 智能体控制器 (SmartAgent)
-    participant Mem as 对话记忆 (Memory)
-    participant LLM as 推理引擎 (LLM / Engine)
-    participant MCP as MCP 协议客户端 (MCPClient)
-    participant Server as MCP 服务端 (MCPServer)
-    participant Tool as 执行工具 (SQLite / Weather / File)
+    actor User as 用户 (旅行者)
+    participant Web as 莫兰迪前端 (Web UI)
+    participant Agent as 旅游智能体 (TravelAgent)
+    participant LLM as 真实大模型 (Qwen/DeepSeek/GPT)
+    participant MCP as MCP 协议总线 (Client/Server)
+    participant Tool as 专属工具 (Weather/Traffic/Attraction)
 
-    User->>Agent: 输入自然语言指令（如：“查询广州天气并记为待办”）
-    Agent->>Mem: 写入用户消息 (User Message)
+    User->>Web: 提出定制需求（例如：广州2日游，地铁出行，周六15:00必须到广州塔登塔）
+    Web->>Agent: POST /api/chat
+    Agent->>Agent: 写入多轮记忆 ConversationMemory
     
-    loop ReAct 认知规划循环 (Max Turns = 6)
-        Agent->>LLM: 提交上下文记忆 + MCP 可用工具清单
-        LLM-->>Agent: 做出思考规划并生成 Tool Call 请求 (Thought + Action)
-        
-        alt 需要调用工具 (Tool Calls)
-            Agent->>MCP: call_tool(tool_name, arguments)
-            MCP->>Server: JSON-RPC 2.0 tools/call
-            Server->>Tool: 驱动执行业务逻辑 (如查询数据库或计算)
-            Tool-->>Server: 返回执行原始数据
-            Server-->>MCP: 封装 ToolCallResult 响应
-            MCP-->>Agent: 交付观测结果 (Observation)
-            Agent->>Mem: 将工具结果写入记忆 (role='tool')
-        else 最终结论已生成 (Final Answer)
-            Agent->>Mem: 写入最终回答 (role='assistant')
-            Agent-->>User: 自然语言呈现结果 + 语音播报朗读 (TTS)
-        end
+    rect rgb(245, 244, 239)
+        Note over Agent,LLM: ReAct 约束求解第一轮：气象与环境感知
+        Agent->>LLM: 提交系统指令 + 用户需求 + 可用 MCP 工具
+        LLM-->>Agent: Thought: 优先确认目的地气温与降雨 -> Call: weather_query(city='广州')
+        Agent->>MCP: 调度 tools/call
+        MCP->>Tool: 执行 WeatherQueryTool
+        Tool-->>MCP: 返回 24~29℃、多云微风、穿衣指数
+        MCP-->>Agent: Observation 注入上下文
     end
+
+    rect rgb(245, 244, 239)
+        Note over Agent,LLM: ReAct 约束求解第二轮：硬性时间点逆推与交通换乘
+        Agent->>LLM: 提交包含天气上下文的最新消息
+        LLM-->>Agent: Thought: 用户要求 15:00 必须到广州塔，需核算前序换乘 -> Call: traffic_transit(...)
+        Agent->>MCP: 调度 tools/call
+        MCP->>Tool: 执行 TrafficTransitTool
+        Tool-->>MCP: 返回地铁换乘路线、预估30分钟、高峰防拥堵贴士
+        MCP-->>Agent: Observation 注入上下文
+    end
+
+    rect rgb(245, 244, 239)
+        Note over Agent,LLM: ReAct 约束求解第三轮：景点预约与招牌美食
+        Agent->>LLM: 提交包含交通方案的上下文
+        LLM-->>Agent: Thought: 确认广州塔与西关周边必吃老字号 -> Call: attraction_info(...)
+        Agent->>MCP: 调度 tools/call
+        MCP->>Tool: 执行 AttractionInfoTool
+        Tool-->>MCP: 返回分时段门票预约规则、周边炳胜粤菜与老字号早茶
+        MCP-->>Agent: Observation 注入上下文
+    end
+
+    Agent->>LLM: 综合所有客观真实数据，编写结构化时间线攻略
+    LLM-->>Agent: 生成包含景点、换乘耗时、老字号餐厅的一条龙完整方案
+    Agent-->>Web: 渲染 ReAct 思考卡片与 Markdown 美学排版
+    Web-->>User: 展现攻略并触发 Web Speech API 语音朗读 (TTS)
 ```
 
 ---
 
-## 四、 核心工程技术亮点
+## 三、 强制接入真实在线大模型的安全规范
 
-1. **上下文滑动窗口记忆（Context Window Budgeting）**：
-   通过 `ConversationMemory` 保留初始系统设定并采用滑动窗口动态修剪历史，确保上下文长度永不爆限，同时维持关键多轮指代记忆。
-2. **零依赖开箱即用与双模引擎**：
-   无需庞大的外部框架或依赖包，底层完全使用原生标准库实现。提供内置规则推理引擎与在线大模型 API（通义千问/OpenAI）双模无缝平滑降级，确保任意评测环境均能稳定运行。
-3. **多模态语音交互闭环**：
-   结合现代浏览器的 Web Speech API，实现点击即录的低延迟连续语音识别（STT）和自然流畅的文本语音朗读（TTS），真正实现“能说会听”。
-4. **安全沙箱防线**：
-   - 文件工具通过 `_resolve_safe_path` 严格锁定在指定的安全沙箱目录内部，彻底杜绝 `../` 路径跨越攻击；
-   - 数学工具基于 Python AST 语法树遍历，仅放行安全操作符与白名单数学函数，彻底杜绝高危的 `eval()` 代码执行风险。
+1. **彻底杜绝伪离线欺骗**：
+   在 `llm_client.py` 中移除任何预设死数据的规则模板，当 `api_key` 为空或无效时，系统直接以结构化 HTTP 400 拦截请求并给出引导，确保智能体的生成富有创造力、温度和真实逻辑推理能力。
+2. **零泄漏安全存储**：
+   用户填入的 API Key 仅保存在当前运行服务内存与本地浏览器 Session 中，绝不回传任何第三方，且前端界面展示时统一做脱敏遮蔽（如 `sk-***abcd`）。

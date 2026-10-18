@@ -1,41 +1,22 @@
 """
-智能体工具集合包
-汇总并导出所有符合 MCP 标准的工具类。
+智能旅游规划 MCP 工具集 (Travel Agent Tools)
+汇集并导出旅游攻略规划的核心工具：天气与防护、交通与换乘规划、景点深度情报与美食打卡、行程归档导出。
 """
 
 from typing import List
 from smart_agent.tools.base import BaseTool
-from smart_agent.tools.todo_tool import (
-    TodoAddTool,
-    TodoListTool,
-    TodoUpdateTool,
-    TodoDeleteTool,
-    SQLQueryTool,
-)
-from smart_agent.tools.file_tool import (
-    FileReadTool,
-    FileWriteTool,
-    FileListTool,
-)
-from smart_agent.tools.weather_tool import (
-    WeatherQueryTool,
-    TravelPlanTool,
-)
-from smart_agent.tools.math_tool import CalculateTool
+from smart_agent.tools.weather_tool import WeatherQueryTool
+from smart_agent.tools.traffic_tool import TrafficTransitTool
+from smart_agent.tools.attraction_tool import AttractionInfoTool
+from smart_agent.tools.itinerary_tool import ItinerarySaveTool, ItineraryListTool
 
 
 def create_default_tools() -> List[BaseTool]:
-    """实例化并返回所有默认系统工具"""
+    """实例化并返回所有专属旅游规划 MCP 工具"""
     return [
-        TodoAddTool(),
-        TodoListTool(),
-        TodoUpdateTool(),
-        TodoDeleteTool(),
-        SQLQueryTool(),
-        FileReadTool(),
-        FileWriteTool(),
-        FileListTool(),
         WeatherQueryTool(),
-        TravelPlanTool(),
-        CalculateTool(),
+        TrafficTransitTool(),
+        AttractionInfoTool(),
+        ItinerarySaveTool(),
+        ItineraryListTool(),
     ]

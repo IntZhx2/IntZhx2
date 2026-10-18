@@ -7,8 +7,13 @@ class SpeechEngine {
   constructor() {
     this.recognition = null;
     this.isListening = false;
-    this.autoTTS = true;
+    this.autoTTS = false;
     this.synth = window.speechSynthesis || null;
+    if (this.synth) {
+      try {
+        this.synth.cancel();
+      } catch (e) {}
+    }
 
     this.onResultCallback = null;
     this.onStatusChangeCallback = null;
@@ -98,36 +103,13 @@ class SpeechEngine {
   }
 
   /**
-   * 文本转语音朗读 (Text-to-Speech)
+   * 文本转语音朗读已停用 (保持界面清爽静音)
    */
   speak(text) {
-    if (!this.synth || !this.autoTTS) return;
-
-    // 清除 Markdown 标记与代码块，保留纯净朗读文本
-    const cleanText = text
-      .replace(/```[\s\S]*?```/g, "已为您执行相关代码与数据块")
-      .replace(/`([^`]+)`/g, "$1")
-      .replace(/[-*#]/g, "")
-      .replace(/\[(.*?)\]\(.*?\)/g, "$1")
-      .trim();
-
-    if (!cleanText) return;
-
-    try {
-      this.synth.cancel(); // 停止当前正在播放的声音
-      const utter = new SpeechSynthesisUtterance(cleanText);
-      utter.lang = "zh-CN";
-      utter.rate = 1.05;
-      utter.pitch = 1.0;
-
-      // 尝试匹配中文发音音色
-      const voices = this.synth.getVoices();
-      const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("cmn"));
-      if (zhVoice) utter.voice = zhVoice;
-
-      this.synth.speak(utter);
-    } catch (e) {
-      console.warn("TTS 朗读异常:", e);
+    if (this.synth) {
+      try {
+        this.synth.cancel();
+      } catch (e) {}
     }
   }
 

@@ -10,7 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnSend = document.getElementById("btn-send");
   const btnMic = document.getElementById("btn-mic");
   const btnClearChat = document.getElementById("btn-clear-chat");
-  const btnToggleTTS = document.getElementById("btn-toggle-tts");
   const recordingBanner = document.getElementById("recording-banner");
   const itinerariesContainer = document.getElementById("itineraries-container");
   const btnRefreshItineraries = document.getElementById("btn-refresh-itineraries");
@@ -195,16 +194,7 @@ document.addEventListener("DOMContentLoaded", () => {
     );
   });
 
-  // 9. 语音朗读开关 (TTS)
-  btnToggleTTS.addEventListener("click", () => {
-    const enabled = window.speechEngine.toggleTTS();
-    btnToggleTTS.classList.toggle("active", enabled);
-    btnToggleTTS.innerHTML = enabled
-      ? '<i class="fa-solid fa-volume-high"></i>'
-      : '<i class="fa-solid fa-volume-xmark"></i>';
-  });
-
-  // 10. 清空会话
+  // 9. 清空会话
   btnClearChat.addEventListener("click", async () => {
     if (!confirm("确定要清空当前的出行规划与对话记忆吗？")) return;
     try {
@@ -269,9 +259,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // 刷新归档列表 (如果生成了攻略文件)
       loadItineraries();
-
-      // 语音播报
-      window.speechEngine.speak(data.answer);
     } catch (e) {
       removeElement(loadingId);
       appendAssistantMessage("网络或通信异常: " + e.message);

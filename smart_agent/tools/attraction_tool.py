@@ -110,14 +110,11 @@ class AttractionInfoTool(BaseTool):
                 break
 
         if not matched_info:
-            res = (
-                f"🏛️ 【{city} · {name} 景点速览】\n"
-                f"- ⏱️ 建议游览时长: 约 1.5~2.5 小时\n"
-                f"- 📅 预约与门票: 建议提前关注景区官方公众号确认最新开放时段与实名预约要求。\n"
-                f"- 📸 游玩建议: 建议避开周末正午人流高峰，携带身份证件有序入场。\n"
-                f"- 🍜 周边美食: 建议就近探寻老城区巷弄内的大众点评高分本土特色餐馆。"
+            return ToolCallResult.text(
+                f"【景点数据未收录】景点知识库中暂未收录景点 '{name}'（城市：{city}）的备案游览与预约规则。"
+                f"请大模型结合公开知识库为用户规划该景点的建议游玩时长、门票预约及周边地道美食。",
+                is_error=True,
             )
-            return ToolCallResult.text(res)
 
         full_name, data = matched_info
         res = (

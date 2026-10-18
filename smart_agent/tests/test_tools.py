@@ -3,6 +3,7 @@
 """
 
 import unittest
+from unittest import mock
 from pathlib import Path
 from smart_agent.tools.weather_tool import WeatherQueryTool
 from smart_agent.tools.traffic_tool import TrafficTransitTool
@@ -22,12 +23,23 @@ class TestTravelToolsSuite(unittest.TestCase):
 
     def test_weather_query_tool(self):
         tool = WeatherQueryTool()
-        res = tool.execute(city="广州")
-        self.assertFalse(res.is_error)
-        text = res.get_text()
-        self.assertIn("广州", text)
-        self.assertIn("气温", text)
-        self.assertIn("穿搭", text)
+        # 1. 在线获取真实数据场景
+        with unittest.mock.patch.object(tool, "_fetch_online", return_value="🌤️ 【广州 气象实时监测】: 实时气温 28℃, 状态: Sunny, 湿度: 50%"):
+            res = tool.execute(city="广州")
+            self.assertFalse(res.is_error)
+            text = res.get_text()
+            self.assertIn("广州", text)
+            self.assertIn("28℃", text)
+
+        # 2. 接口失败场景：真实反馈错误，绝不伪造假模板
+        with unittest.mock.patch.object(tool, "_fetch_online", return_value=""):
+            fail_res = tool.execute(city="广州")
+            self.assertTrue(fail_res.is_error)
+            self.assertIn("实时气象查询失败", fail_res.get_text())
+
+        # 3. 缺少参数
+        err_res = tool.execute(city="")
+        self.assertTrue(err_res.is_error)
 
     def test_traffic_transit_tool(self):
         tool = TrafficTransitTool()
@@ -39,6 +51,11 @@ class TestTravelToolsSuite(unittest.TestCase):
         self.assertIn("广州塔", text)
         self.assertIn("地铁", text)
         self.assertIn("预估耗时", text)
+
+        # 未收录路线真实反馈 is_error=True
+        unrecorded = tool.execute(city="广州", origin="火星基地", destination="未知地点")
+        self.assertTrue(unrecorded.is_error)
+        self.assertIn("未收录", unrecorded.get_text())
 
         # 缺少参数异常
         err_res = tool.execute(city="广州", origin="")
@@ -58,6 +75,11 @@ class TestTravelToolsSuite(unittest.TestCase):
         r2 = tool.execute(city="广州", attraction_name="永庆坊")
         self.assertFalse(r2.is_error)
         self.assertIn("西关老字号", r2.get_text())
+
+        # 未收录景点真实反馈 is_error=True
+        unrecorded = tool.execute(city="广州", attraction_name="虚拟无名景点XYZ")
+        self.assertTrue(unrecorded.is_error)
+        self.assertIn("未收录", unrecorded.get_text())
 
     def test_itinerary_save_and_list_tool(self):
         save_tool = ItinerarySaveTool()

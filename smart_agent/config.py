@@ -19,10 +19,10 @@ WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 SERVER_HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("AGENT_PORT", "8000"))
 
-# LLM 与推理后端配置（强制要求配置 API KEY）
-API_BASE = os.environ.get("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+# LLM 与推理后端配置（强制要求配置 API KEY，默认适配本地 CPA / Gemini）
+API_BASE = os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:8317/v1")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
-DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen-plus")
+DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "gemini-3.5-flash-lite")
 
 # 智能体 ReAct 循环与记忆预算
 MAX_REACT_TURNS = 6

@@ -38,25 +38,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 常用模型提供商预设
   const PRESETS = {
+    cpa: {
+      base: "http://127.0.0.1:8317/v1",
+      model: "gemini-3.5-flash-lite",
+      key: "123456",
+    },
     bailian: {
       base: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       model: "qwen-plus",
+      key: "",
     },
     deepseek: {
       base: "https://api.deepseek.com/v1",
       model: "deepseek-chat",
+      key: "",
     },
     zhipu: {
       base: "https://open.bigmodel.cn/api/paas/v4",
       model: "glm-4-flash",
+      key: "",
     },
     silicon: {
       base: "https://api.siliconflow.cn/v1",
       model: "Qwen/Qwen2.5-7B-Instruct",
+      key: "",
     },
     openai: {
       base: "https://api.openai.com/v1",
       model: "gpt-4o-mini",
+      key: "",
     },
   };
 
@@ -87,6 +97,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (PRESETS[key]) {
         inputApiBase.value = PRESETS[key].base;
         inputModel.value = PRESETS[key].model;
+        if (PRESETS[key].key) {
+          inputApiKey.value = PRESETS[key].key;
+        }
       }
     });
   });

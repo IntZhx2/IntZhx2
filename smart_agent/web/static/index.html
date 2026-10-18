@@ -234,28 +234,28 @@
         <div class="form-field">
           <label>快速选用服务商：</label>
           <div class="preset-chips">
-            <button class="preset-pill active" data-preset="bailian">🌟 阿里云百炼 (Qwen 推荐)</button>
+            <button class="preset-pill active" data-preset="cpa">💻 本地 CPA (Gemini 推荐)</button>
+            <button class="preset-pill" data-preset="bailian">🌟 阿里云百炼 (Qwen)</button>
             <button class="preset-pill" data-preset="deepseek">🚀 DeepSeek 官方</button>
-            <button class="preset-pill" data-preset="zhipu">💡 智谱 BigModel (GLM-4-flash)</button>
-            <button class="preset-pill" data-preset="silicon">⚡ 硅基流动</button>
+            <button class="preset-pill" data-preset="zhipu">💡 智谱 BigModel</button>
             <button class="preset-pill" data-preset="openai">🌐 OpenAI</button>
           </div>
         </div>
 
         <div class="form-field">
           <label for="input-api-base">API 端点 (Base URL)：</label>
-          <input type="text" id="input-api-base" value="https://dashscope.aliyuncs.com/compatible-mode/v1" />
+          <input type="text" id="input-api-base" value="http://127.0.0.1:8317/v1" />
         </div>
 
         <div class="form-field">
           <label for="input-api-key">API 密钥 (API Key)：<span class="required">*必填</span></label>
-          <input type="password" id="input-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx" autocomplete="off" />
-          <span class="field-tips">密钥仅保存在内存中，安全可靠。填写后即可体验真实大模型思考。</span>
+          <input type="password" id="input-api-key" placeholder="本地 CPA 默认通常为 123456" value="123456" autocomplete="off" />
+          <span class="field-tips">本地 CPA 访问密钥默认为 123456；若使用云端 API 请输入对应 sk-xxx。</span>
         </div>
 
         <div class="form-field">
           <label for="input-model">模型代号 (Model Name)：</label>
-          <input type="text" id="input-model" value="qwen-plus" />
+          <input type="text" id="input-model" value="gemini-3.5-flash-lite" />
         </div>
       </div>
 

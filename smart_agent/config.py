@@ -1,6 +1,6 @@
 """
 全局配置模块 (Global Configuration)
-管理智能体运行环境、MCP 服务配置、大模型端点及本地存储路径。
+管理智能旅游规划 Agent 运行环境、MCP 服务配置、大模型端点及本地存储路径。
 """
 
 import os
@@ -10,7 +10,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 WORKSPACE_DIR = DATA_DIR / "workspace"
-DB_PATH = DATA_DIR / "agent_data.db"
 
 # 自动创建必要数据目录
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -20,9 +19,7 @@ WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 SERVER_HOST = os.environ.get("AGENT_HOST", "127.0.0.1")
 SERVER_PORT = int(os.environ.get("AGENT_PORT", "8000"))
 
-# LLM 与推理后端配置
-# 支持兼容 OpenAI 接口标准的 API（如 通义千问百炼、DeepSeek、Ollama 等）
-# 若未提供 API_KEY，系统将自动无缝切换至高质量本地语义规则推理引擎，确保评测与教学展示零门槛开箱即用
+# LLM 与推理后端配置（强制要求配置 API KEY）
 API_BASE = os.environ.get("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen-plus")
@@ -31,13 +28,21 @@ DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "qwen-plus")
 MAX_REACT_TURNS = 6
 MEMORY_WINDOW_SIZE = 12
 
-# 系统通用提示词
-SYSTEM_PROMPT = """你是一个具备“能说会做”能力的高级智能助理（SmartAgent）。
-你通过 Model Context Protocol (MCP) 标准协议连接并调用工具来解决用户的问题。
+# 旅游规划智能体专属系统提示词
+SYSTEM_PROMPT = """你是一个专业且贴心的一站式旅游规划智能体（TravelAgent）。
+你的唯一核心使命是：根据用户指定的【地点】、【交通方式】、【指定时间点在什么地方】等各种个性化要求，自动生成包含【景点、交通、美食】的一条龙深度旅游攻略。
 
-你的核心原则与行为准则：
-1. 【能说】：以清晰、友好、自然的中文与用户进行多轮对话，具备良好的上下文理解和记忆能力。
-2. 【会做】：当用户的需求需要获取实时数据、管理待办事项、执行复杂数学计算或读写文件时，必须主动且准确地调用对应的 MCP 工具。
-3. 【知行合一】：在调用工具前先简要说明意图，工具执行返回结果后，必须根据观察到的真实数据进行归纳、总结和回复，严禁臆造外部信息。
-4. 【安全严谨】：在文件读写和命令执行时保持安全性，遇到异常或不合理输入时给出友好解释和改进建议。
+你的核心工作职责与输出标准：
+1. 【严格遵循约束】：必须优先满足用户输入的硬性约束（例如：“周六下午3点必须到达广州塔”、“全程只坐地铁与公交”、“带老人孩子需要平缓路线”、“预算偏经济”等）。
+2. 【一条龙完整要素】：每个日程段必须包含：
+   - 🏛️ 【景点精选】：核心游览亮点、建议游玩时长、门票与提前预约须知（防跑空）；
+   - 🚇 【交通接驳】：起点至终点的具体交通换乘指引（如地铁线路、换乘站、预估耗时与花费）；
+   - 🍜 【地道美食】：推荐就近步行可达的本土老字号或必吃榜特色餐馆及招牌必点菜品；
+   - ⏰ 【时间线规划】：按清晨/上午/午餐/下午/傍晚/夜间划分精确时间节点。
+3. 【主动调度 MCP 工具链】：
+   - 遇到城市规划任务，必须首先调用 `weather_query` 获取当季实时天气与穿衣防雨指数；
+   - 涉及两地通勤或用户提出特定时间接驳时，调用 `traffic_transit` 核验路线耗时；
+   - 涉及热门地标时，调用 `attraction_info` 确认预约规则与周边老字号；
+   - 规划完成后，可主动询问用户是否需要调用 `itinerary_save` 保存为本地攻略文档。
+4. 【文风与排版】：条理清晰，使用精美的 Markdown 表格、时间线列表与 Emoji 标识，行文温润亲切，充满对旅途的人文关怀。
 """

@@ -635,6 +635,219 @@ body {
   background-color: #ffffff;
 }
 
+/* 实时流式步骤与指示器 (调用什么就即时展示什么) */
+.live-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background-color: var(--bg-subtle);
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  font-size: 0.8rem;
+  color: var(--morandi-blue);
+  margin-top: 6px;
+  animation: pulseStatus 2s infinite ease-in-out;
+}
+
+.live-status-bar.error {
+  color: var(--morandi-rose);
+  background-color: var(--morandi-rose-light);
+  border-color: var(--morandi-rose);
+  animation: none;
+}
+
+@keyframes pulseStatus {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 1; }
+}
+
+.live-trace-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.live-trace-step {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background-color: var(--bg-card);
+  overflow: hidden;
+  font-size: 0.8rem;
+  transition: all 0.25s ease;
+  animation: fadeInStep 0.25s ease;
+}
+
+@keyframes fadeInStep {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.live-trace-step.running {
+  border-color: var(--morandi-blue);
+  box-shadow: 0 0 0 2px rgba(93, 117, 140, 0.12);
+}
+
+.live-trace-step.success {
+  border-color: rgba(110, 132, 113, 0.35);
+}
+
+.live-trace-step.error {
+  border-color: rgba(176, 116, 102, 0.35);
+}
+
+.live-step-header {
+  padding: 6px 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 0.78rem;
+}
+
+.live-step-body {
+  padding: 8px 12px;
+  background-color: #ffffff;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.6;
+}
+
+/* Markdown 排版深度优化 (全支持 h1-h6、####、表格、引用与代码) */
+.msg-text .md-h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-main);
+  margin: 16px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  font-family: var(--font-serif);
+}
+
+.msg-text .md-h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--morandi-blue);
+  margin: 14px 0 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px dashed var(--border-subtle);
+}
+
+.msg-text .md-h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--morandi-sage);
+  margin: 12px 0 6px;
+}
+
+.msg-text .md-h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--morandi-rose);
+  margin: 10px 0 4px;
+}
+
+.msg-text .md-h5 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 8px 0 4px;
+}
+
+.msg-text .md-h6 {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 6px 0 2px;
+}
+
+.msg-text .md-p {
+  margin: 6px 0;
+  line-height: 1.7;
+}
+
+.msg-text .md-ul, .msg-text .md-ol {
+  margin: 6px 0 8px 22px;
+  padding: 0;
+}
+
+.msg-text .md-ul li, .msg-text .md-ol li {
+  margin: 4px 0;
+  line-height: 1.6;
+}
+
+.msg-text .md-quote {
+  margin: 8px 0;
+  padding: 8px 14px;
+  background-color: var(--bg-subtle);
+  border-left: 3px solid var(--morandi-blue);
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+
+.msg-text .md-inline-code {
+  background-color: var(--bg-subtle);
+  color: var(--morandi-blue);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.84em;
+  font-family: monospace;
+  border: 1px solid var(--border-subtle);
+}
+
+.msg-text .code-block {
+  background-color: #282c34;
+  color: #abb2bf;
+  padding: 12px 14px;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  margin: 10px 0;
+  font-family: monospace;
+}
+
+.msg-text .md-hr {
+  border: none;
+  border-top: 1px dashed var(--border-subtle);
+  margin: 14px 0;
+}
+
+.msg-text .table-container {
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.msg-text .md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+  text-align: left;
+}
+
+.msg-text .md-table th {
+  background-color: var(--bg-subtle);
+  color: var(--morandi-blue);
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  font-weight: 600;
+}
+
+.msg-text .md-table td {
+  padding: 8px 12px;
+  border: 1px solid var(--border-subtle);
+  background-color: #ffffff;
+}
+
+.msg-text .md-link {
+  color: var(--morandi-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* 底部交互条 */
 .chat-input-bar {
   background-color: var(--bg-body);

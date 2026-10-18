@@ -62,15 +62,20 @@ class SmartAgent:
     def run(
         self,
         user_input: str,
+        on_step: Optional[Callable[[AgentStepTrace], None]] = None,
         on_step_callback: Optional[Callable[[AgentStepTrace], None]] = None,
     ) -> AgentRunResult:
         """接收用户自然语言输入，启动 ReAct 认知规划并执行工具调用"""
         traces: List[AgentStepTrace] = []
+        step_callback = on_step or on_step_callback
 
         def _emit(trace: AgentStepTrace):
             traces.append(trace)
-            if on_step_callback:
-                on_step_callback(trace)
+            if step_callback:
+                try:
+                    step_callback(trace)
+                except Exception:
+                    pass
 
         # 1. 记录用户输入至记忆
         self.memory.add_user_message(user_input)

@@ -14,7 +14,7 @@ from smart_agent.mcp.server import MCPServer
 from smart_agent.mcp.client import MCPClient
 from smart_agent.agent.memory import ConversationMemory
 from smart_agent.agent.llm_client import LLMClient
-from smart_agent.agent.core import SmartAgent
+from smart_agent.agent.core import SmartAgent, AgentStepTrace
 from smart_agent.tools import create_default_tools
 
 logger = logging.getLogger("web.server")
@@ -165,11 +165,49 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(400, {"error": "出行需求描述 message 不能为空"})
                 return
 
+            if not AgentServiceHolder.llm_client.has_valid_key():
+                self._send_json(400, {
+                    "error": "【未配置大模型 API Key】当前系统已关闭伪离线模式，必须接入真实大模型 API！请在【⚙️ API 设置】中配置。"
+                })
+                return
+
+            is_stream = payload.get("stream", True)
+            if not is_stream:
+                try:
+                    res = AgentServiceHolder.agent.run(message)
+                    self._send_json(200, res.to_dict())
+                except Exception as e:
+                    self._send_json(400, {"error": str(e)})
+                return
+
+            # SSE 流式实时推送 (调用什么就即时展示什么，拒绝盲等一次性输出)
             try:
-                res = AgentServiceHolder.agent.run(message)
-                self._send_json(200, res.to_dict())
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                self.send_header("Access-Control-Allow-Origin", "*")
+                self.end_headers()
+
+                def send_sse(data_dict: dict):
+                    msg = f"data: {json.dumps(data_dict, ensure_ascii=False)}\n\n".encode("utf-8")
+                    self.wfile.write(msg)
+                    self.wfile.flush()
+
+                def on_step(trace: AgentStepTrace):
+                    send_sse(trace.to_dict())
+
+                result = AgentServiceHolder.agent.run(message, on_step=on_step)
+                send_sse({"type": "done", "result": result.to_dict()})
+
             except Exception as e:
-                self._send_json(400, {"error": str(e)})
+                logger.error(f"流式执行异常: {e}")
+                err_dict = {"type": "error", "error": str(e)}
+                try:
+                    self.wfile.write(f"data: {json.dumps(err_dict, ensure_ascii=False)}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    pass
             return
 
         elif path == "/api/config":

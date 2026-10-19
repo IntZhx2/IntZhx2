@@ -132,7 +132,7 @@ class AttractionInfoTool(BaseTool):
 
         # 2. 次选百度地图 POI 地点服务实时检索
         if self.baidu_client.is_configured:
-            poi = self.baidu_client.search_place(name, city)
+            poi, err_msg = self.baidu_client.search_place(name, city)
             if poi:
                 res = (
                     f"🏛️ 【{city} · {poi['name']} 官方实地文旅档案】\n"
@@ -145,6 +145,14 @@ class AttractionInfoTool(BaseTool):
                     f"- 💡 游玩与美食建议: 请大模型结合上述真实地址与开放时间，为游客合理规划游玩时长与就近地道风味。"
                 )
                 return ToolCallResult.text(res)
+            elif err_msg and ("未授权" in err_msg or "被禁用" in err_msg or "AK" in err_msg or "配额" in err_msg):
+                return ToolCallResult.text(
+                    f"⚠️ 【百度地图接口调用反馈】\n"
+                    f"景点 '{name}' 实时 POI 检索失败: {err_msg}。\n"
+                    f"💡 建议排查: 请登录百度地图开放平台控制台检查 AK 应用类型（需为「服务端」并开启地点检索 API 权限）。\n"
+                    f"请大模型结合公开知识库为用户规划该景点的建议游玩时长、门票预约及周边地道美食。",
+                    is_error=True,
+                )
 
         # 3. 未收录真实反馈，绝不捏造
         return ToolCallResult.text(

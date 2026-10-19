@@ -13,7 +13,8 @@ class TestBaiduMapClient(unittest.TestCase):
         self.assertFalse(client.is_configured)
 
         # 未配置 AK 时应明确失败
-        self.assertIsNone(client.geocode("广州塔"))
+        coords, err = client.geocode("广州塔")
+        self.assertIsNone(coords)
         ok, res, err = client.route_plan("广州", "广州南站", "广州塔")
         self.assertFalse(ok)
         self.assertIn("未配置", err)
@@ -26,15 +27,16 @@ class TestBaiduMapClient(unittest.TestCase):
             "",
         )
         client = BaiduMapClient(ak="mock_test_ak")
-        coords = client.geocode("广州塔", "广州")
+        coords, err = client.geocode("广州塔", "广州")
         self.assertIsNotNone(coords)
+        self.assertEqual(err, "")
         self.assertAlmostEqual(coords[0], 23.10647)
         self.assertAlmostEqual(coords[1], 113.32446)
 
     @patch("smart_agent.tools.baidu_map.BaiduMapClient.geocode")
     @patch("smart_agent.tools.baidu_map.BaiduMapClient._request")
     def test_transit_route_plan(self, mock_request, mock_geocode):
-        mock_geocode.side_effect = [(23.05, 113.39), (22.50, 113.94)]
+        mock_geocode.side_effect = [((23.05, 113.39), ""), ((22.50, 113.94), "")]
         mock_request.return_value = (
             True,
             {
@@ -84,7 +86,7 @@ class TestBaiduMapClient(unittest.TestCase):
             "",
         )
         client = BaiduMapClient(ak="mock_test_ak")
-        poi = client.search_place("深圳湾公园", "深圳")
+        poi, err = client.search_place("深圳湾公园", "深圳")
         self.assertIsNotNone(poi)
         self.assertEqual(poi["name"], "深圳湾公园")
         self.assertEqual(poi["rating"], "4.8")

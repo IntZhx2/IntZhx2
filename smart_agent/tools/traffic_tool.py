@@ -86,6 +86,15 @@ class TrafficTransitTool(BaseTool):
                     f"- 🌐 数据来源: 百度地图实时路线规划 (DirectionLite API)"
                 )
                 return ToolCallResult.text(res)
+            elif err_msg and ("未授权" in err_msg or "被禁用" in err_msg or "AK" in err_msg or "配额" in err_msg):
+                # 百度接口鉴权或权限报错，真实报告具体原因，避免被误判为未收录
+                return ToolCallResult.text(
+                    f"⚠️ 【百度地图接口调用反馈】\n"
+                    f"从 '{origin}' 到 '{dest}' 的实时测算未能完成: {err_msg}。\n"
+                    f"💡 建议排查: 请登录百度地图开放平台控制台检查 AK 应用类型（需为「服务端」并开启路线规划 API 权限）。\n"
+                    f"请大模型结合真实地理网络为用户规划合理的地铁/打车换乘指引与耗时预估。",
+                    is_error=True,
+                )
 
         # 2. 次选本地精品交通路网知识库
         local_details = self._analyze_local_route(city, origin, dest, mode)

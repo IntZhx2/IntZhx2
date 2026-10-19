@@ -31,13 +31,13 @@ class BaiduMapClient:
     BASE_URL = "https://api.map.baidu.com"
 
     def __init__(self, ak: Optional[str] = None):
-        self.ak = (ak or get_baidu_ak()).strip()
+        self.ak = (ak if ak is not None else get_baidu_ak()).strip()
 
     @property
     def is_configured(self) -> bool:
         return bool(self.ak)
 
-    def _request(self, endpoint: str, params: Dict[str, str], timeout: int = 5) -> Tuple[bool, Dict[str, Any], str]:
+    def _request(self, endpoint: str, params: Dict[str, str], timeout: int = 6) -> Tuple[bool, Dict[str, Any], str]:
         """发起 HTTP GET 请求并解析 JSON 响应"""
         if not self.is_configured:
             return False, {}, "百度地图 AK 未配置或解密失败"
@@ -64,7 +64,7 @@ class BaiduMapClient:
                 2: "请求参数非法或缺失",
                 200: "百度地图 AK 不存在或非法，请检查密钥是否正确",
                 210: "百度地图 AK 启用了 IP 白名单校验，当前请求 IP 未在白名单中",
-                240: "服务未授权或未开通 WebService API 权限",
+                240: "服务未授权或未开通 WebService API 权限（APP 服务被禁用，请在百度控制台将 AK 设置为「服务端」类型并勾选对应接口）",
                 301: "百度地图每日免费调用配额已用尽",
                 302: "天级调用并发超限，请稍后重试",
             }
@@ -76,7 +76,7 @@ class BaiduMapClient:
         except Exception as e:
             return False, {}, f"请求解析异常: {str(e)}"
 
-    def geocode(self, address: str, city: str = "") -> Optional[Tuple[float, float]]:
+    def geocode(self, address: str, city: str = "") -> Tuple[Optional[Tuple[float, float]], str]:
         """
         地址编码：将地址名称转换为经纬度坐标 (lat, lng)
         """
@@ -84,15 +84,15 @@ class BaiduMapClient:
         if city:
             params["city"] = city
 
-        ok, data, _ = self._request("/geocoding/v3/", params)
+        ok, data, err = self._request("/geocoding/v3/", params)
         if not ok:
-            return None
+            return None, err
 
         result = data.get("result", {})
         loc = result.get("location")
         if loc and "lat" in loc and "lng" in loc:
-            return float(loc["lat"]), float(loc["lng"])
-        return None
+            return (float(loc["lat"]), float(loc["lng"])), ""
+        return None, f"未能在地图中定位地址 '{address}'"
 
     def route_plan(
         self,
@@ -109,13 +109,13 @@ class BaiduMapClient:
             return False, None, "未配置百度地图 AK"
 
         # 1. 地理编码起终点
-        orig_coords = self.geocode(origin, city)
-        dest_coords = self.geocode(destination, city)
-
+        orig_coords, orig_err = self.geocode(origin, city)
         if not orig_coords:
-            return False, None, f"百度地理编码未能识别起点: '{origin}'"
+            return False, None, orig_err or f"百度地理编码未能识别起点: '{origin}'"
+
+        dest_coords, dest_err = self.geocode(destination, city)
         if not dest_coords:
-            return False, None, f"百度地理编码未能识别终点: '{destination}'"
+            return False, None, dest_err or f"百度地理编码未能识别终点: '{destination}'"
 
         orig_str = f"{orig_coords[0]},{orig_coords[1]}"
         dest_str = f"{dest_coords[0]},{dest_coords[1]}"
@@ -214,13 +214,13 @@ class BaiduMapClient:
                 "tip": "长距离步行建议穿舒适运动鞋，晴雨天注意防晒与补水。",
             }, ""
 
-    def search_place(self, attraction_name: str, city: str = "") -> Optional[Dict[str, Any]]:
+    def search_place(self, attraction_name: str, city: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
         """
         地点详情检索 (Place API POI 深度搜索)
         获取景点的真实地址、星级评分、开放营业时间、标签与咨询电话
         """
         if not self.is_configured:
-            return None
+            return None, "未配置百度地图 AK"
 
         params = {
             "query": attraction_name,
@@ -230,13 +230,13 @@ class BaiduMapClient:
         if city:
             params["region"] = city
 
-        ok, data, _ = self._request("/place/v2/search", params)
+        ok, data, err = self._request("/place/v2/search", params)
         if not ok:
-            return None
+            return None, err
 
         results = data.get("results", [])
         if not results:
-            return None
+            return None, f"未检索到与 '{attraction_name}' 匹配的地点"
 
         poi = results[0]
         detail = poi.get("detail_info", {})
@@ -249,4 +249,4 @@ class BaiduMapClient:
             "rating": detail.get("overall_rating") or detail.get("rating") or "4.6",
             "shop_hours": detail.get("shop_hours") or "以景区现场开放时间为准",
             "price": detail.get("price"),
-        }
+        }, ""

@@ -107,6 +107,14 @@ class LLMClient:
                     f"模型名称未匹配 (HTTP 400): 服务端未找到模型 '{self.model}'。"
                     "当前本地 CPA 绑定的 Google Gemini 模型名称通常为 gemini-3.5-flash-lite 或 gemini-3.8-flash-high，请在【⚙️ API 设置】中修改模型名称！"
                 )
+            elif "User location is not supported" in err_msg or "FAILED_PRECONDITION" in err_msg:
+                raise RuntimeError(
+                    "Google Gemini API 提示地区受限 (User location is not supported)！\n"
+                    "原因分析：CPA 依赖科学上网代理（通常需在后台开启 Clash 并监听 7890 端口）。\n"
+                    "👉 解决方案：\n"
+                    "1. 请开启您的科学上网软件（确保代理可用且节点在港/美/日/新等支持地区）；\n"
+                    "2. 或直接点击右上角【⚙️ API 设置】，一键切换为国内免翻墙的真实服务商（如阿里云百炼 Qwen 或 DeepSeek）。"
+                )
             elif he.code == 429:
                 raise RuntimeError("大模型调用超出额度限制 (429 Too Many Requests / Quota Exceeded)！请检查账户余额。")
             raise RuntimeError(f"大模型服务返回错误 (HTTP {he.code}): {err_msg[:250]}")

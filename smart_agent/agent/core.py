@@ -94,14 +94,18 @@ class SmartAgent:
             # 调用大模型/本地语义引擎做出行动决策
             response = self.llm_client.chat_completion(messages, tools=tools_schema)
             tool_calls = response.get("tool_calls")
-            assistant_content = response.get("content") or ""
+            assistant_content = (response.get("content") or "").strip()
 
-            # 情况 A: 模型未发起工具调用，直接输出最终语言答复
+            # 情况 A: 模型未发起工具调用
             if not tool_calls:
-                final_answer = assistant_content
-                self.memory.add_assistant_message(final_answer)
-                _emit(AgentStepTrace(step_type="answer", content=final_answer))
-                break
+                if assistant_content:
+                    final_answer = assistant_content
+                    self.memory.add_assistant_message(final_answer)
+                    _emit(AgentStepTrace(step_type="answer", content=final_answer))
+                    break
+                else:
+                    # 模型返回空文本且无工具调用，退出循环以进入无 tools 强行正文汇总阶段
+                    break
 
             # 情况 B: 模型产生思考并规划调用 MCP 工具
             if assistant_content:
@@ -146,9 +150,31 @@ class SmartAgent:
                 # 将工具执行结果作为 tool 角色消息写入对话记忆
                 self.memory.add_tool_message(tool_call_id=tool_id, name=tool_name, content=res_text)
 
-        # 兜底：如果到达最大轮次仍未完成，给用户一个友好说明
+        # 3. 终结汇总保障：若 final_answer 仍为空，剥离 tools 参数强制要求大模型汇总生成完整长文
         if not final_answer:
-            final_answer = "我已经为您执行了相关操作，以上是工具处理的最新结果。"
+            synth_messages = list(self.memory.get_messages())
+            synth_messages.append({
+                "role": "user",
+                "content": (
+                    "现在所有相关气象、景点门票预约和交通路线工具已调用完毕。"
+                    "请根据上面所有工具获得的真实数据，严格满足我的出行偏好与时间约束，"
+                    "为我撰写包含【早中晚完整时间线、景点核心亮点与门票预约、具体地铁/打车换乘耗时、周边地道老字号美食必吃菜品】"
+                    "的一条龙深度定制旅游攻略。请使用优雅的 Markdown 格式输出（包含表格与各级标题）。"
+                ),
+            })
+            try:
+                synth_resp = self.llm_client.chat_completion(synth_messages, tools=None)
+                final_answer = (synth_resp.get("content") or "").strip()
+                if final_answer:
+                    self.memory.add_assistant_message(final_answer)
+                    _emit(AgentStepTrace(step_type="answer", content=final_answer))
+            except Exception as e:
+                logger.error(f"强制生成攻略长文失败: {e}")
+                raise
+
+        # 4. 彻底杜绝敷衍模板
+        if not final_answer:
+            final_answer = "⚠️ 大模型未返回最终攻略正文，请检查网络或重新点击生成。"
             self.memory.add_assistant_message(final_answer)
             _emit(AgentStepTrace(step_type="answer", content=final_answer))
 

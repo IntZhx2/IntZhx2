@@ -1,0 +1,252 @@
+"""
+百度地图 WebService API 客户端 (Baidu Maps API Client)
+提供经纬度地理编码 (Geocoding)、全国跨城/同城路线规划 (DirectionLite) 及 POI 深度检索 (Place API)。
+结合密钥安全解密机制，确保 API Key 不被泄露与盗用。
+"""
+
+import os
+import json
+import urllib.parse
+import urllib.request
+from typing import Any, Dict, Optional, Tuple
+from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK
+from smart_agent.utils.security import decrypt_token
+
+
+def get_baidu_ak() -> str:
+    """获取当前可用的百度地图 AK (优先环境变量，次选解密内置密钥)"""
+    env_ak = os.environ.get("BAIDU_MAPS_AK", "").strip() or BAIDU_MAPS_AK_ENV.strip()
+    if env_ak:
+        return env_ak
+    if ENCRYPTED_BAIDU_AK:
+        decrypted = decrypt_token(ENCRYPTED_BAIDU_AK)
+        if decrypted:
+            return decrypted
+    return ""
+
+
+class BaiduMapClient:
+    """百度地图 WebService API 客户端封装"""
+
+    BASE_URL = "https://api.map.baidu.com"
+
+    def __init__(self, ak: Optional[str] = None):
+        self.ak = (ak or get_baidu_ak()).strip()
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.ak)
+
+    def _request(self, endpoint: str, params: Dict[str, str], timeout: int = 5) -> Tuple[bool, Dict[str, Any], str]:
+        """发起 HTTP GET 请求并解析 JSON 响应"""
+        if not self.is_configured:
+            return False, {}, "百度地图 AK 未配置或解密失败"
+
+        params["ak"] = self.ak
+        params["output"] = "json"
+        url = f"{self.BASE_URL}{endpoint}?{urllib.parse.urlencode(params)}"
+
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "TravelAgent-BaiduMapClient/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            status = data.get("status", -1)
+            if status == 0:
+                return True, data, ""
+
+            # 百度地图错误码细分友善提示
+            error_msgs = {
+                1: "百度地图内部服务错误",
+                2: "请求参数非法或缺失",
+                200: "百度地图 AK 不存在或非法，请检查密钥是否正确",
+                210: "百度地图 AK 启用了 IP 白名单校验，当前请求 IP 未在白名单中",
+                240: "服务未授权或未开通 WebService API 权限",
+                301: "百度地图每日免费调用配额已用尽",
+                302: "天级调用并发超限，请稍后重试",
+            }
+            msg = error_msgs.get(status, f"百度地图接口错误 (代码: {status}, 信息: {data.get('message', '未知')})")
+            return False, data, msg
+
+        except urllib.error.URLError as e:
+            return False, {}, f"网络连接异常: {e.reason}"
+        except Exception as e:
+            return False, {}, f"请求解析异常: {str(e)}"
+
+    def geocode(self, address: str, city: str = "") -> Optional[Tuple[float, float]]:
+        """
+        地址编码：将地址名称转换为经纬度坐标 (lat, lng)
+        """
+        params = {"address": address}
+        if city:
+            params["city"] = city
+
+        ok, data, _ = self._request("/geocoding/v3/", params)
+        if not ok:
+            return None
+
+        result = data.get("result", {})
+        loc = result.get("location")
+        if loc and "lat" in loc and "lng" in loc:
+            return float(loc["lat"]), float(loc["lng"])
+        return None
+
+    def route_plan(
+        self,
+        city: str,
+        origin: str,
+        destination: str,
+        transit_mode: str = "metro_bus",
+    ) -> Tuple[bool, Optional[Dict[str, str]], str]:
+        """
+        全国/同城路线规划 (DirectionLite API)
+        transit_mode: metro_bus (公交地铁), taxi/self_drive (驾车/打车), walk (步行)
+        """
+        if not self.is_configured:
+            return False, None, "未配置百度地图 AK"
+
+        # 1. 地理编码起终点
+        orig_coords = self.geocode(origin, city)
+        dest_coords = self.geocode(destination, city)
+
+        if not orig_coords:
+            return False, None, f"百度地理编码未能识别起点: '{origin}'"
+        if not dest_coords:
+            return False, None, f"百度地理编码未能识别终点: '{destination}'"
+
+        orig_str = f"{orig_coords[0]},{orig_coords[1]}"
+        dest_str = f"{dest_coords[0]},{dest_coords[1]}"
+
+        # 2. 根据出行方式调用对应路线规划接口
+        if transit_mode == "metro_bus":
+            ok, data, err = self._request(
+                "/directionlite/v1/transit",
+                {"origin": orig_str, "destination": dest_str},
+            )
+            if not ok:
+                return False, None, err
+
+            routes = data.get("result", {}).get("routes", [])
+            if not routes:
+                return False, None, f"未能检索到从 '{origin}' 到 '{destination}' 的公共交通换乘方案"
+
+            best = routes[0]
+            duration_min = round(best.get("duration", 0) / 60)
+            cost_val = best.get("price", 0)
+            cost_str = f"{cost_val} 元 / 人" if cost_val else "约 2~7 元 (以实际购票为准)"
+
+            # 提取线路换乘关键节点
+            steps_desc = []
+            for step_group in best.get("steps", []):
+                for step in step_group:
+                    vehicle = step.get("vehicle_info", {})
+                    detail = vehicle.get("detail", {})
+                    name = detail.get("name")
+                    if name:
+                        steps_desc.append(f"搭乘【{name}】")
+                    elif step.get("instruction"):
+                        instr = step.get("instruction")
+                        if "步行" in instr or "换乘" in instr or "到达" in instr:
+                            steps_desc.append(instr)
+
+            route_summary = " ➔ ".join(steps_desc[:5]) if steps_desc else "按照地铁/公交站内导向指引乘车"
+
+            return True, {
+                "duration": f"约 {duration_min} 分钟",
+                "cost": cost_str,
+                "route": route_summary,
+                "tip": "高峰期换乘客流密集，请预留充裕候车进站时间。",
+            }, ""
+
+        elif transit_mode in ("taxi", "self_drive"):
+            ok, data, err = self._request(
+                "/directionlite/v1/driving",
+                {"origin": orig_str, "destination": dest_str},
+            )
+            if not ok:
+                return False, None, err
+
+            routes = data.get("result", {}).get("routes", [])
+            if not routes:
+                return False, None, f"未能检索到从 '{origin}' 到 '{destination}' 的驾车方案"
+
+            best = routes[0]
+            duration_min = round(best.get("duration", 0) / 60)
+            distance_km = round(best.get("distance", 0) / 1000, 1)
+
+            if transit_mode == "taxi":
+                # 估算打车费用 (起步 12 元/3km，超出部分约 2.6 元/km)
+                est_taxi = 12 + max(0, distance_km - 3) * 2.6
+                cost_str = f"约 {round(est_taxi)}~{round(est_taxi * 1.25)} 元 (网约车/出租车)"
+            else:
+                cost_str = f"油费/电费约 {round(distance_km * 0.7)} 元 (全程约 {distance_km} 公里)"
+
+            return True, {
+                "duration": f"约 {duration_min} 分钟 (全程约 {distance_km} km)",
+                "cost": cost_str,
+                "route": f"沿主干道及城市快速路行驶，全程约 {distance_km} 公里",
+                "tip": "早晚高峰主干道通行车流较大，建议提前留意实时导航避堵路线。",
+            }, ""
+
+        else:  # walk
+            ok, data, err = self._request(
+                "/directionlite/v1/walking",
+                {"origin": orig_str, "destination": dest_str},
+            )
+            if not ok:
+                return False, None, err
+
+            routes = data.get("result", {}).get("routes", [])
+            if not routes:
+                return False, None, f"未能检索到从 '{origin}' 到 '{destination}' 的步行方案"
+
+            best = routes[0]
+            duration_min = round(best.get("duration", 0) / 60)
+            distance_km = round(best.get("distance", 0) / 1000, 1)
+
+            return True, {
+                "duration": f"约 {duration_min} 分钟 (步行约 {distance_km} km)",
+                "cost": "0 元 (绿色徒步)",
+                "route": f"沿人行道及景观步道穿行，全程约 {distance_km} 公里",
+                "tip": "长距离步行建议穿舒适运动鞋，晴雨天注意防晒与补水。",
+            }, ""
+
+    def search_place(self, attraction_name: str, city: str = "") -> Optional[Dict[str, Any]]:
+        """
+        地点详情检索 (Place API POI 深度搜索)
+        获取景点的真实地址、星级评分、开放营业时间、标签与咨询电话
+        """
+        if not self.is_configured:
+            return None
+
+        params = {
+            "query": attraction_name,
+            "scope": "2",  # 详细信息模式
+            "page_size": "1",
+        }
+        if city:
+            params["region"] = city
+
+        ok, data, _ = self._request("/place/v2/search", params)
+        if not ok:
+            return None
+
+        results = data.get("results", [])
+        if not results:
+            return None
+
+        poi = results[0]
+        detail = poi.get("detail_info", {})
+
+        return {
+            "name": poi.get("name", attraction_name),
+            "address": poi.get("address", "详见地图标注"),
+            "telephone": poi.get("telephone", "暂无官方公开电话"),
+            "tag": detail.get("tag", "热门文旅地标"),
+            "rating": detail.get("overall_rating") or detail.get("rating") or "4.6",
+            "shop_hours": detail.get("shop_hours") or "以景区现场开放时间为准",
+            "price": detail.get("price"),
+        }

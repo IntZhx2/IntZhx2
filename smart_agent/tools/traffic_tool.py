@@ -1,14 +1,20 @@
 """
 交通接驳与通勤换乘规划工具 (Traffic & Transit Tool)
+结合百度地图 WebService API (DirectionLite) 与本地精品交通路网，
 计算旅游行程中各景点、车站与酒店之间的交通换乘路线、预估耗时、费用及高峰避堵建议。
 """
 
 from typing import Any, Dict, Optional
 from smart_agent.tools.base import BaseTool
 from smart_agent.mcp.protocol import ToolCallResult
+from smart_agent.tools.baidu_map import BaiduMapClient
 
 
 class TrafficTransitTool(BaseTool):
+    def __init__(self):
+        super().__init__()
+        self.baidu_client = BaiduMapClient()
+
     @property
     def name(self) -> str:
         return "traffic_transit"
@@ -28,15 +34,15 @@ class TrafficTransitTool(BaseTool):
             "properties": {
                 "city": {
                     "type": "string",
-                    "description": "所在城市，如 '广州'",
+                    "description": "所在城市，如 '广州', '深圳', '北京'",
                 },
                 "origin": {
                     "type": "string",
-                    "description": "出发地点，如 '广州南站', '酒店', '沙面岛'",
+                    "description": "出发地点，如 '广州大学城', '广州南站', '酒店', '沙面岛'",
                 },
                 "destination": {
                     "type": "string",
-                    "description": "目的地点，如 '广州塔', '广东省博物馆', '北京路'",
+                    "description": "目的地点，如 '深圳湾口岸', '广州塔', '广东省博物馆', '北京路'",
                 },
                 "transit_mode": {
                     "type": "string",
@@ -65,27 +71,45 @@ class TrafficTransitTool(BaseTool):
         }
         mode_desc = mode_name_map.get(mode, "公共交通")
 
-        # 检索已验证交通路网节点
-        transit_details = self._analyze_route(city, origin, dest, mode)
-        if not transit_details:
-            return ToolCallResult.text(
-                f"【交通路线未收录】本地测算库暂未收录从 '{origin}' 到 '{dest}' 的专用交通方案。"
-                f"请大模型结合真实地理网络为用户规划合理的地铁/打车换乘指引与耗时预估。",
-                is_error=True,
+        # 1. 优先尝试百度地图实时路线规划 (DirectionLite WebService)
+        if self.baidu_client.is_configured:
+            ok, transit_details, err_msg = self.baidu_client.route_plan(city, origin, dest, mode)
+            if ok and transit_details:
+                res = (
+                    f"🗺️ 【{city} 交通接驳与通勤指引】\n"
+                    f"- 🚩 起点: {origin} ➔ 🏁 终点: {dest}\n"
+                    f"- 🚗 推荐交通方式: {mode_desc}\n"
+                    f"- ⏱️ 预估耗时: {transit_details['duration']}\n"
+                    f"- 💰 预估花费: {transit_details['cost']}\n"
+                    f"- 🧭 换乘推荐路线:\n  {transit_details['route']}\n"
+                    f"- ⚠️ 交通避坑贴士: {transit_details['tip']}\n"
+                    f"- 🌐 数据来源: 百度地图实时路线规划 (DirectionLite API)"
+                )
+                return ToolCallResult.text(res)
+
+        # 2. 次选本地精品交通路网知识库
+        local_details = self._analyze_local_route(city, origin, dest, mode)
+        if local_details:
+            res = (
+                f"🗺️ 【{city} 交通接驳与通勤指引】\n"
+                f"- 🚩 起点: {origin} ➔ 🏁 终点: {dest}\n"
+                f"- 🚗 推荐交通方式: {mode_desc}\n"
+                f"- ⏱️ 预估耗时: {local_details['duration']}\n"
+                f"- 💰 预估花费: {local_details['cost']}\n"
+                f"- 🧭 换乘推荐路线:\n  {local_details['route']}\n"
+                f"- ⚠️ 交通避坑贴士: {local_details['tip']}\n"
+                f"- 📍 数据来源: 本地已核验专线交通库"
             )
+            return ToolCallResult.text(res)
 
-        res = (
-            f"🗺️ 【{city} 交通接驳与通勤指引】\n"
-            f"- 🚩 起点: {origin} ➔ 🏁 终点: {dest}\n"
-            f"- 🚗 推荐交通方式: {mode_desc}\n"
-            f"- ⏱️ 预估耗时: {transit_details['duration']}\n"
-            f"- 💰 预估花费: {transit_details['cost']}\n"
-            f"- 🧭 换乘推荐路线:\n  {transit_details['route']}\n"
-            f"- ⚠️ 交通避坑贴士: {transit_details['tip']}"
+        # 3. 未收录真实反馈，绝不捏造
+        return ToolCallResult.text(
+            f"【交通路线未收录】未能检索到从 '{origin}' 到 '{dest}' 的专线交通方案。"
+            f"请大模型结合真实地理网络为用户规划合理的地铁/打车换乘指引与耗时预估。",
+            is_error=True,
         )
-        return ToolCallResult.text(res)
 
-    def _analyze_route(self, city: str, orig: str, dest: str, mode: str) -> Optional[Dict[str, str]]:
+    def _analyze_local_route(self, city: str, orig: str, dest: str, mode: str) -> Optional[Dict[str, str]]:
         if "南站" in orig and "广州塔" in dest:
             if mode == "metro_bus":
                 return {
@@ -123,5 +147,4 @@ class TrafficTransitTool(BaseTool):
                 "tip": "花城广场中轴线可步行经海心桥（需预约）直达广州塔南广场。",
             }
 
-        # 未命中真实库，返回 None，绝不伪造虚假数据
         return None

@@ -24,6 +24,13 @@ API_BASE = os.environ.get("OPENAI_BASE_URL", "http://127.0.0.1:8317/v1")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "gemini-3.5-flash-lite")
 
+# 百度地图 WebService API 配置 (安全加密存储，防止 Secret Scanning 与密钥盗用)
+# 支持两种配置方式：
+# 1. 环境变量: export BAIDU_MAPS_AK="your_plain_ak"
+# 2. 内置加密密文: 由 smart_agent/utils/encrypt_key.py 生成的高熵不可逆密文
+BAIDU_MAPS_AK_ENV = os.environ.get("BAIDU_MAPS_AK", "")
+ENCRYPTED_BAIDU_AK = os.environ.get("ENCRYPTED_BAIDU_AK", "")
+
 # 智能体 ReAct 循环与记忆预算
 MAX_REACT_TURNS = 6
 MEMORY_WINDOW_SIZE = 12

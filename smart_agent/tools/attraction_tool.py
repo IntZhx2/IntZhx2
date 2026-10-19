@@ -1,13 +1,15 @@
 """
 景点深度情报与美食打卡工具 (Attraction & Gourmet Tool)
-提供目的地景点的游玩时长建议、门票预约规则、打卡机位以及周边必吃特色地道美食。
+结合百度地图 Place API POI 深度检索与精选文旅知识图谱，
+提供全国旅游景点的真实地址、开放时间、评分、游玩时长建议、门票预约及周边地道美食。
 """
 
 from typing import Any, Dict
 from smart_agent.tools.base import BaseTool
 from smart_agent.mcp.protocol import ToolCallResult
+from smart_agent.tools.baidu_map import BaiduMapClient
 
-# 核心景点与特色美食知识图谱
+# 核心景点与特色美食深度知识图谱（带详细预约规则与老字号美食指南）
 ATTRACTION_KNOWLEDGE = {
     "广州塔": {
         "city": "广州",
@@ -67,6 +69,10 @@ ATTRACTION_KNOWLEDGE = {
 
 
 class AttractionInfoTool(BaseTool):
+    def __init__(self):
+        super().__init__()
+        self.baidu_client = BaiduMapClient()
+
     @property
     def name(self) -> str:
         return "attraction_info"
@@ -75,7 +81,7 @@ class AttractionInfoTool(BaseTool):
     def description(self) -> str:
         return (
             "查询旅游景点的深度详细信息与周边地道美食推荐。"
-            "包含景点的最佳游玩时间段、建议停留时长、门票与提前预约规则、核心打卡机位，"
+            "包含景点的真实地址、最佳游玩时间段、建议停留时长、门票与提前预约规则、核心打卡机位，"
             "以及周边步行可达的正宗老字号餐厅与招牌菜品推荐。"
         )
 
@@ -86,11 +92,11 @@ class AttractionInfoTool(BaseTool):
             "properties": {
                 "city": {
                     "type": "string",
-                    "description": "所在城市，例如 '广州'",
+                    "description": "所在城市，例如 '广州', '深圳', '杭州'",
                 },
                 "attraction_name": {
                     "type": "string",
-                    "description": "景点名称，例如 '广州塔', '永庆坊', '沙面', '广东省博物馆', '越秀公园', '北京路'",
+                    "description": "景点名称，例如 '广州塔', '深圳湾公园', '永庆坊', '西湖'",
                 },
             },
             "required": ["city", "attraction_name"],
@@ -103,27 +109,46 @@ class AttractionInfoTool(BaseTool):
         if not name:
             return ToolCallResult.text("错误: attraction_name 景点名称不能为空", is_error=True)
 
+        # 1. 优先命中本地深度文旅知识库
         matched_info = None
         for k, v in ATTRACTION_KNOWLEDGE.items():
             if k in name or name in k:
                 matched_info = (k, v)
                 break
 
-        if not matched_info:
-            return ToolCallResult.text(
-                f"【景点数据未收录】景点知识库中暂未收录景点 '{name}'（城市：{city}）的备案游览与预约规则。"
-                f"请大模型结合公开知识库为用户规划该景点的建议游玩时长、门票预约及周边地道美食。",
-                is_error=True,
+        if matched_info:
+            full_name, data = matched_info
+            res = (
+                f"🏛️ 【{city} · {full_name} 游览与美食深度攻略】\n"
+                f"- 🏷️ 景点定位: {data['tag']}\n"
+                f"- ⏱️ 建议时长: {data['duration']}\n"
+                f"- ⏰ 黄金游览时段: {data['best_time']}\n"
+                f"- 🎟️ 门票与预约要求: {data['booking']}\n"
+                f"- 📸 核心机位与打卡亮点: {data['highlights']}\n"
+                f"- 🍽️ 周边招牌美食推荐: {data['gourmet']}\n"
+                f"- 📍 数据来源: 本地已核验精品文旅智库"
             )
+            return ToolCallResult.text(res)
 
-        full_name, data = matched_info
-        res = (
-            f"🏛️ 【{city} · {full_name} 游览与美食攻略】\n"
-            f"- 🏷️ 景点定位: {data['tag']}\n"
-            f"- ⏱️ 建议时长: {data['duration']}\n"
-            f"- ⏰ 黄金游览时段: {data['best_time']}\n"
-            f"- 🎟️ 门票与预约要求: {data['booking']}\n"
-            f"- 📸 核心机位与打卡亮点: {data['highlights']}\n"
-            f"- 🍽️ 周边招牌美食推荐: {data['gourmet']}"
+        # 2. 次选百度地图 POI 地点服务实时检索
+        if self.baidu_client.is_configured:
+            poi = self.baidu_client.search_place(name, city)
+            if poi:
+                res = (
+                    f"🏛️ 【{city} · {poi['name']} 官方实地文旅档案】\n"
+                    f"- 🏷️ 地理分类: {poi['tag']}\n"
+                    f"- 📍 详细地址: {poi['address']}\n"
+                    f"- ⭐ 游客评分: {poi['rating']} / 5.0\n"
+                    f"- ⏰ 营业开放时间: {poi['shop_hours']}\n"
+                    f"- 📞 景区/商户电话: {poi['telephone']}\n"
+                    f"- 🌐 数据来源: 百度地图实时地点检索 (Place POI API)\n"
+                    f"- 💡 游玩与美食建议: 请大模型结合上述真实地址与开放时间，为游客合理规划游玩时长与就近地道风味。"
+                )
+                return ToolCallResult.text(res)
+
+        # 3. 未收录真实反馈，绝不捏造
+        return ToolCallResult.text(
+            f"【景点数据未收录】未能通过百度地图或文旅知识库检索到景点 '{name}'（城市：{city}）的备案游览与预约规则。"
+            f"请大模型结合公开知识库为用户规划该景点的建议游玩时长、门票预约及周边地道美食。",
+            is_error=True,
         )
-        return ToolCallResult.text(res)

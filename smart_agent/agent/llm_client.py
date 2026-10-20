@@ -82,7 +82,14 @@ class LLMClient:
 
         req = urllib.request.Request(url, data=data, headers=headers, method="POST")
         try:
-            with urllib.request.urlopen(req, timeout=45.0) as resp:
+            # 若连接本地端点 (127.0.0.1 或 localhost)，强制禁用代理直连，防止被外部代理软件拦截
+            if "127.0.0.1" in url or "localhost" in url:
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                resp_ctx = opener.open(req, timeout=45.0)
+            else:
+                resp_ctx = urllib.request.urlopen(req, timeout=45.0)
+
+            with resp_ctx as resp:
                 resp_body = resp.read().decode("utf-8")
                 result = json.loads(resp_body)
                 if "choices" not in result or not result["choices"]:
@@ -92,7 +99,12 @@ class LLMClient:
         except urllib.error.HTTPError as he:
             err_msg = he.read().decode("utf-8", errors="ignore")
             logger.error(f"云端大模型接口报错 HTTP {he.code}: {err_msg}")
-            if he.code == 401:
+            if "Direct IP access is not allowed" in err_msg:
+                raise RuntimeError(
+                    "系统检测到本地代理软件拦截了 127.0.0.1 本地通信 (Direct IP access is not allowed)！\n"
+                    "已自动启用直连白名单。请确认当前后台服务或 CPA 是否正常运行于 127.0.0.1:8317。"
+                )
+            elif he.code == 401:
                 raise RuntimeError(
                     "API Key 鉴权失败 (401 Unauthorized)！请检查填写的 API Key 是否正确。"
                     "若使用本地 CPA 代理，默认访问密钥通常为 123456。"

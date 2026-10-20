@@ -6,6 +6,14 @@
 import os
 from pathlib import Path
 
+# 确保本地环回地址 (127.0.0.1, localhost) 绝不经过外部 HTTP/HTTPS 代理拦截
+for var in ("no_proxy", "NO_PROXY"):
+    cur = os.environ.get(var, "")
+    if not cur:
+        os.environ[var] = "localhost,127.0.0.1"
+    elif "127.0.0.1" not in cur:
+        os.environ[var] = f"{cur},localhost,127.0.0.1"
+
 # 项目路径定义
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"

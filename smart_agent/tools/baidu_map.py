@@ -7,11 +7,27 @@
 import os
 import re
 import json
+import time
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
 from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK
 from smart_agent.utils.security import decrypt_token
+
+# 进程内地理编码与 POI 高速缓存（避免重复请求消耗 QPS 与配额）
+_GEOCODE_CACHE: Dict[str, Tuple[float, float]] = {}
+_POI_CACHE: Dict[str, Dict[str, Any]] = {}
+_LAST_REQUEST_TIME: float = 0.0
+
+
+def _rate_limit_pace(min_interval: float = 0.35):
+    """请求平滑限流节流器，确保每秒请求数严格保持在免费 3 QPS 安全阈值以内"""
+    global _LAST_REQUEST_TIME
+    now = time.time()
+    elapsed = now - _LAST_REQUEST_TIME
+    if elapsed < min_interval:
+        time.sleep(min_interval - elapsed)
+    _LAST_REQUEST_TIME = time.time()
 
 
 def get_baidu_ak() -> str:
@@ -43,6 +59,7 @@ class BaiduMapClient:
         if not self.is_configured:
             return False, {}, "百度地图 AK 未配置或解密失败"
 
+        _rate_limit_pace(0.35)
         params["ak"] = self.ak
         params["output"] = "json"
         url = f"{self.BASE_URL}{endpoint}?{urllib.parse.urlencode(params)}"
@@ -81,6 +98,10 @@ class BaiduMapClient:
         """
         地址编码：将地址名称转换为经纬度坐标 (lat, lng)
         """
+        cache_key = f"{city}:{address}".strip()
+        if cache_key in _GEOCODE_CACHE:
+            return _GEOCODE_CACHE[cache_key], ""
+
         params = {"address": address}
         if city:
             params["city"] = city
@@ -92,7 +113,9 @@ class BaiduMapClient:
         result = data.get("result", {})
         loc = result.get("location")
         if loc and "lat" in loc and "lng" in loc:
-            return (float(loc["lat"]), float(loc["lng"])), ""
+            coords = (float(loc["lat"]), float(loc["lng"]))
+            _GEOCODE_CACHE[cache_key] = coords
+            return coords, ""
         return None, f"未能在地图中定位地址 '{address}'"
 
     def route_plan(
@@ -233,6 +256,10 @@ class BaiduMapClient:
         if not self.is_configured:
             return None, "未配置百度地图 AK"
 
+        cache_key = f"{city}:{attraction_name}".strip()
+        if cache_key in _POI_CACHE:
+            return _POI_CACHE[cache_key], ""
+
         params = {
             "query": attraction_name,
             "scope": "2",  # 详细信息模式
@@ -252,7 +279,7 @@ class BaiduMapClient:
         poi = results[0]
         detail = poi.get("detail_info", {})
 
-        return {
+        res_dict = {
             "name": poi.get("name", attraction_name),
             "address": poi.get("address", "详见地图标注"),
             "telephone": poi.get("telephone", "暂无官方公开电话"),
@@ -260,4 +287,6 @@ class BaiduMapClient:
             "rating": detail.get("overall_rating") or detail.get("rating") or "4.6",
             "shop_hours": detail.get("shop_hours") or "以景区现场开放时间为准",
             "price": detail.get("price"),
-        }, ""
+        }
+        _POI_CACHE[cache_key] = res_dict
+        return res_dict, ""

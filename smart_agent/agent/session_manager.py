@@ -29,12 +29,15 @@ class SessionManager:
             try:
                 with open(file, "r", encoding="utf-8") as f:
                     data = json.load(f)
+                turns = data.get("turns", [])
+                if not turns:
+                    continue  # 忽略尚未包含任何交互轮次的空会话
                 sessions.append({
                     "session_id": data.get("session_id", file.stem),
                     "title": data.get("title", "未命名对话"),
                     "created_at": data.get("created_at", ""),
                     "updated_at": data.get("updated_at", ""),
-                    "turn_count": len(data.get("turns", [])),
+                    "turn_count": len(turns),
                     "preview": data.get("preview", ""),
                 })
             except Exception:

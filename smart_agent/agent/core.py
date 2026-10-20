@@ -36,6 +36,14 @@ class AgentRunResult:
     traces: List[AgentStepTrace]
     memory_length: int
 
+    @property
+    def final_response(self) -> str:
+        return self.answer
+
+    @property
+    def steps(self) -> List[AgentStepTrace]:
+        return self.traces
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "answer": self.answer,

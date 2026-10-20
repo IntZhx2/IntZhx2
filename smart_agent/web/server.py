@@ -234,8 +234,8 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     saved_sess = SessionManager.append_turn(
                         session_id=session_id,
                         user_prompt=message,
-                        assistant_response=res.final_response,
-                        step_traces=[s.to_dict() for s in res.steps],
+                        assistant_response=res.answer,
+                        step_traces=[s.to_dict() for s in res.traces],
                         llm_messages=AgentServiceHolder.memory.export_messages(),
                     )
                     res_dict = res.to_dict()
@@ -272,7 +272,7 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 saved_sess = SessionManager.append_turn(
                     session_id=session_id,
                     user_prompt=message,
-                    assistant_response=result.final_response,
+                    assistant_response=result.answer,
                     step_traces=collected_traces,
                     llm_messages=AgentServiceHolder.memory.export_messages(),
                 )

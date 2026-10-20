@@ -18,10 +18,12 @@ for var in ("no_proxy", "NO_PROXY"):
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 WORKSPACE_DIR = DATA_DIR / "workspace"
+SESSIONS_DIR = DATA_DIR / "sessions"
 
 # 自动创建必要数据目录
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
+SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Web 服务配置
 SERVER_HOST = os.environ.get("AGENT_HOST", "127.0.0.1")

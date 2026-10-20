@@ -338,6 +338,98 @@ body {
   padding: 20px 10px;
 }
 
+.session-item {
+  background-color: #ffffff;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.session-item:hover {
+  border-color: var(--morandi-blue);
+  box-shadow: 0 2px 8px rgba(107, 130, 149, 0.12);
+  transform: translateY(-1px);
+}
+
+.session-item.active {
+  background-color: rgba(107, 130, 149, 0.06);
+  border-color: var(--morandi-blue);
+  border-left: 3px solid var(--morandi-blue);
+}
+
+.session-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.session-item-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.session-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.session-item:hover .session-item-actions {
+  opacity: 1;
+}
+
+.session-act-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  transition: all 0.15s;
+}
+
+.session-act-btn:hover {
+  color: var(--morandi-blue);
+  background-color: rgba(107, 130, 149, 0.1);
+}
+
+.session-act-btn.delete:hover {
+  color: #c94a4a;
+  background-color: rgba(201, 74, 74, 0.1);
+}
+
+.session-item-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.session-badge {
+  background-color: var(--bg-hover);
+  color: var(--morandi-blue);
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-weight: 500;
+}
+
 .itinerary-card {
   background-color: #ffffff;
   border: 1px solid var(--border-subtle);

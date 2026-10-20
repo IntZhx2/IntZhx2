@@ -105,6 +105,29 @@ class ConversationMemory:
         self._messages = []
         self._init_system_prompt()
 
+    def load_from_messages(self, messages_data: List[Dict[str, Any]]):
+        """直接从字典列表恢复内存消息"""
+        if not messages_data:
+            self.clear()
+            return
+        self._messages = []
+        for item in messages_data:
+            self._messages.append(Message(
+                role=item.get("role", "user"),
+                content=item.get("content", ""),
+                tool_calls=item.get("tool_calls"),
+                tool_call_id=item.get("tool_call_id"),
+                name=item.get("name"),
+                timestamp=item.get("timestamp", time.time()),
+            ))
+        if not any(m.role == "system" for m in self._messages):
+            self._messages.insert(0, Message(role="system", content=self.system_prompt))
+        self._trim_window()
+
+    def export_messages(self) -> List[Dict[str, Any]]:
+        """导出当前内存消息列表字典"""
+        return [asdict(m) for m in self._messages]
+
     def save_to_file(self, filepath: Optional[Path] = None):
         """将会话持久化到磁盘"""
         target = filepath or (DATA_DIR / f"session_{self.session_id}.json")

@@ -38,12 +38,20 @@
           <span class="status-label" id="status-label">正在检查 API 状态...</span>
         </div>
 
+        <button class="nav-btn" id="btn-top-new-chat" title="开启全新旅游规划对话">
+          <i class="fa-solid fa-plus"></i> <span>新建对话</span>
+        </button>
+
+        <button class="nav-btn" id="btn-download-active-chat" title="下载导出当前完整对话攻略 (.md)">
+          <i class="fa-solid fa-download"></i> <span>导出记录</span>
+        </button>
+
         <button class="nav-btn primary" id="btn-open-config" title="配置大模型 API Key">
           <i class="fa-solid fa-key"></i> <span>API 设置</span>
         </button>
 
-        <button class="nav-btn icon-only" id="btn-clear-chat" title="清空会话上下文">
-          <i class="fa-solid fa-arrow-rotate-left"></i>
+        <button class="nav-btn icon-only" id="btn-clear-chat" title="清空当前会话界面">
+          <i class="fa-solid fa-trash-can"></i>
         </button>
       </div>
     </header>
@@ -101,15 +109,20 @@
           </div>
         </div>
 
-        <!-- 侧边栏：已归档历史攻略 -->
+        <!-- 侧边栏：对话历史记录 -->
         <div class="sidebar-section flex-1">
           <div class="section-title">
-            <i class="fa-solid fa-bookmark"></i>
-            <span>已归档攻略方案</span>
-            <button class="btn-text-action" id="btn-refresh-itineraries" title="刷新文件列表"><i class="fa-solid fa-rotate-right"></i></button>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>对话历史记录</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button class="btn-text-action" id="btn-sidebar-new-chat" title="新建会话"><i class="fa-solid fa-plus"></i></button>
+              <button class="btn-text-action" id="btn-refresh-sessions" title="刷新历史列表"><i class="fa-solid fa-rotate-right"></i></button>
+            </div>
           </div>
-          <div class="itinerary-list" id="itineraries-container">
-            <div class="empty-state">暂无已归档攻略，生成后可让智能体帮您保存到本地</div>
+          <div class="itinerary-list" id="sessions-container">
+            <div class="empty-state">暂无历史对话，开启规划后将自动保存并支持接续</div>
           </div>
         </div>
 

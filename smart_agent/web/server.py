@@ -15,6 +15,7 @@ from smart_agent.mcp.client import MCPClient
 from smart_agent.agent.memory import ConversationMemory
 from smart_agent.agent.llm_client import LLMClient
 from smart_agent.agent.core import SmartAgent, AgentStepTrace
+from smart_agent.agent.session_manager import SessionManager
 from smart_agent.tools import create_default_tools
 
 logger = logging.getLogger("web.server")
@@ -28,6 +29,7 @@ class AgentServiceHolder:
     llm_client: LLMClient
     agent: SmartAgent
     memory: ConversationMemory
+    current_session_id: Optional[str] = None
 
     @classmethod
     def initialize(cls):
@@ -38,6 +40,7 @@ class AgentServiceHolder:
         cls.mcp_client = MCPClient(cls.mcp_server)
         cls.llm_client = LLMClient()
         cls.memory = ConversationMemory(session_id="travel_web_session")
+        cls.current_session_id = None
         cls.agent = SmartAgent(
             memory=cls.memory,
             mcp_client=cls.mcp_client,
@@ -124,6 +127,47 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(200, {"tools": tools})
             return
 
+        elif path == "/api/sessions":
+            sessions = SessionManager.list_sessions()
+            self._send_json(200, {
+                "sessions": sessions,
+                "active_session_id": AgentServiceHolder.current_session_id
+            })
+            return
+
+        elif path == "/api/session":
+            query = urllib.parse.parse_qs(parsed.query)
+            sess_id = query.get("id", [""])[0]
+            if not sess_id:
+                self._send_json(400, {"error": "缺少 session id 参数"})
+                return
+            session_data = SessionManager.get_session(sess_id)
+            if not session_data:
+                self._send_json(404, {"error": f"未找到会话 {sess_id}"})
+                return
+            # 激活该会话并将其完整消息注入内存上下文（实现无缝接续对话）
+            AgentServiceHolder.current_session_id = sess_id
+            AgentServiceHolder.memory.load_from_messages(session_data.get("llm_messages", []))
+            self._send_json(200, session_data)
+            return
+
+        elif path == "/api/session/download":
+            query = urllib.parse.parse_qs(parsed.query)
+            sess_id = query.get("id", [""])[0]
+            if not sess_id:
+                self._send_json(400, {"error": "缺少 session id 参数"})
+                return
+            md_content = SessionManager.export_markdown(sess_id)
+            md_bytes = md_content.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/markdown; charset=utf-8")
+            self.send_header("Content-Disposition", f'attachment; filename="chat_{sess_id}.md"')
+            self.send_header("Content-Length", str(len(md_bytes)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(md_bytes)
+            return
+
         elif path == "/api/itineraries":
             try:
                 files = list(WORKSPACE_DIR.glob("*.md")) + list(WORKSPACE_DIR.glob("*.txt"))
@@ -171,11 +215,33 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 })
                 return
 
+            # 会话 ID 绑定与恢复 (支持多轮接续对话)
+            session_id = payload.get("session_id") or AgentServiceHolder.current_session_id
+            if not session_id:
+                new_sess = SessionManager.create_new_session()
+                session_id = new_sess["session_id"]
+                AgentServiceHolder.current_session_id = session_id
+            elif AgentServiceHolder.current_session_id != session_id:
+                exist_sess = SessionManager.get_session(session_id)
+                if exist_sess:
+                    AgentServiceHolder.current_session_id = session_id
+                    AgentServiceHolder.memory.load_from_messages(exist_sess.get("llm_messages", []))
+
             is_stream = payload.get("stream", True)
             if not is_stream:
                 try:
                     res = AgentServiceHolder.agent.run(message)
-                    self._send_json(200, res.to_dict())
+                    saved_sess = SessionManager.append_turn(
+                        session_id=session_id,
+                        user_prompt=message,
+                        assistant_response=res.final_response,
+                        step_traces=[s.to_dict() for s in res.steps],
+                        llm_messages=AgentServiceHolder.memory.export_messages(),
+                    )
+                    res_dict = res.to_dict()
+                    res_dict["session_id"] = session_id
+                    res_dict["title"] = saved_sess.get("title", "")
+                    self._send_json(200, res_dict)
                 except Exception as e:
                     self._send_json(400, {"error": str(e)})
                 return
@@ -194,11 +260,29 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.write(msg)
                     self.wfile.flush()
 
+                collected_traces = []
+
                 def on_step(trace: AgentStepTrace):
+                    collected_traces.append(trace.to_dict())
                     send_sse(trace.to_dict())
 
                 result = AgentServiceHolder.agent.run(message, on_step=on_step)
-                send_sse({"type": "done", "result": result.to_dict()})
+
+                # 自动持久化保存本轮多轮会话
+                saved_sess = SessionManager.append_turn(
+                    session_id=session_id,
+                    user_prompt=message,
+                    assistant_response=result.final_response,
+                    step_traces=collected_traces,
+                    llm_messages=AgentServiceHolder.memory.export_messages(),
+                )
+
+                send_sse({
+                    "type": "done",
+                    "session_id": session_id,
+                    "title": saved_sess.get("title", ""),
+                    "result": result.to_dict(),
+                })
 
             except Exception as e:
                 logger.error(f"流式执行异常: {e}")
@@ -208,6 +292,26 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self.wfile.flush()
                 except Exception:
                     pass
+            return
+
+        elif path == "/api/session/new":
+            title = payload.get("title", "新旅游行程规划")
+            new_sess = SessionManager.create_new_session(title)
+            AgentServiceHolder.current_session_id = new_sess["session_id"]
+            AgentServiceHolder.memory.clear()
+            self._send_json(200, new_sess)
+            return
+
+        elif path == "/api/session/delete":
+            sess_id = payload.get("id") or payload.get("session_id")
+            if not sess_id:
+                self._send_json(400, {"error": "缺少 session_id 参数"})
+                return
+            ok = SessionManager.delete_session(sess_id)
+            if AgentServiceHolder.current_session_id == sess_id:
+                AgentServiceHolder.current_session_id = None
+                AgentServiceHolder.memory.clear()
+            self._send_json(200, {"success": ok})
             return
 
         elif path == "/api/config":

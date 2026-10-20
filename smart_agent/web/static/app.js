@@ -11,10 +11,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnMic = document.getElementById("btn-mic");
   const btnClearChat = document.getElementById("btn-clear-chat");
   const recordingBanner = document.getElementById("recording-banner");
-  const itinerariesContainer = document.getElementById("itineraries-container");
-  const btnRefreshItineraries = document.getElementById("btn-refresh-itineraries");
+  const sessionsContainer = document.getElementById("sessions-container") || document.getElementById("itineraries-container");
+  const btnRefreshSessions = document.getElementById("btn-refresh-sessions") || document.getElementById("btn-refresh-itineraries");
+  const btnTopNewChat = document.getElementById("btn-top-new-chat");
+  const btnSidebarNewChat = document.getElementById("btn-sidebar-new-chat");
+  const btnDownloadActiveChat = document.getElementById("btn-download-active-chat");
   const agentStatusPill = document.getElementById("agent-status-pill");
   const statusLabel = document.getElementById("status-label");
+
+  let currentSessionId = null;
 
   // 侧边栏出行组合表单
   const guideCity = document.getElementById("guide-city");
@@ -69,9 +74,16 @@ document.addEventListener("DOMContentLoaded", () => {
     },
   };
 
-  // 1. 初始化检查配置与归档
+  // 1. 初始化检查配置与会话历史
   checkConfig();
-  loadItineraries();
+  loadSessions();
+
+  // 会话操作按钮绑定
+  if (btnTopNewChat) btnTopNewChat.addEventListener("click", () => startNewSession());
+  if (btnSidebarNewChat) btnSidebarNewChat.addEventListener("click", () => startNewSession());
+  if (btnRefreshSessions) btnRefreshSessions.addEventListener("click", () => loadSessions());
+  if (btnDownloadActiveChat) btnDownloadActiveChat.addEventListener("click", () => downloadSession(currentSessionId));
+  if (btnClearChat) btnClearChat.addEventListener("click", () => startNewSession());
 
   // 2. 弹窗交互绑定
   btnOpenConfig.addEventListener("click", () => {
@@ -214,8 +226,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 刷新历史归档
-  btnRefreshItineraries.addEventListener("click", loadItineraries);
+  // 刷新历史会话
+  if (btnRefreshItineraries) btnRefreshItineraries.addEventListener("click", loadSessions);
 
   /**
    * 触发行程需求发送与大模型交互
@@ -244,7 +256,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, stream: true }),
+        body: JSON.stringify({ message: text, stream: true, session_id: currentSessionId }),
       });
 
       if (!resp.ok) {
@@ -286,7 +298,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (e) {}
       }
 
-      loadItineraries();
+      loadSessions();
     } catch (e) {
       liveMsg.showError(e.message);
     } finally {
@@ -447,10 +459,14 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (data.type === "answer" && data.content) {
       liveMsg.setAnswer(data.content);
     } else if (data.type === "done") {
+      if (data.session_id) {
+        currentSessionId = data.session_id;
+      }
       if (data.result && data.result.answer) {
         liveMsg.setAnswer(data.result.answer);
       }
       liveMsg.finish();
+      loadSessions();
     } else if (data.type === "error") {
       liveMsg.showError(data.error);
     }
@@ -482,30 +498,255 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * 加载归档攻略列表
+   * 加载历史会话列表 (支持多轮接续与导出下载)
    */
-  async function loadItineraries() {
+  async function loadSessions() {
+    if (!sessionsContainer) return;
     try {
-      const resp = await fetch("/api/itineraries");
+      const resp = await fetch("/api/sessions");
       const data = await resp.json();
-      const files = data.itineraries || [];
-      if (files.length === 0) {
-        itinerariesContainer.innerHTML = '<div class="empty-state">暂未归档旅游攻略，对智能体说“保存此行程”即可归档至本地工作空间</div>';
+      const sessions = data.sessions || [];
+
+      if (!currentSessionId && data.active_session_id) {
+        currentSessionId = data.active_session_id;
+      }
+
+      if (sessions.length === 0) {
+        sessionsContainer.innerHTML = '<div class="empty-state">暂无历史对话，开启规划后将自动保存在此，随时可接续</div>';
         return;
       }
 
-      itinerariesContainer.innerHTML = files
+      sessionsContainer.innerHTML = sessions
         .map(
-          (f) => `
-        <div class="itinerary-card" onclick="alert('该攻略已保存在本地工作区 data/workspace/${escapeHtml(f.filename)}')">
-          <div class="itinerary-card-title">📄 ${escapeHtml(f.filename)}</div>
-          <div class="itinerary-card-meta">${escapeHtml(f.size)}</div>
+          (s) => `
+        <div class="session-item ${s.session_id === currentSessionId ? 'active' : ''}" data-id="${escapeHtml(s.session_id)}">
+          <div class="session-item-top">
+            <div class="session-item-title" title="${escapeHtml(s.title)}">💬 ${escapeHtml(s.title)}</div>
+            <div class="session-item-actions">
+              <button class="session-act-btn" title="导出下载此对话 (.md)" data-action="download" data-id="${escapeHtml(s.session_id)}">
+                <i class="fa-solid fa-download"></i>
+              </button>
+              <button class="session-act-btn delete" title="删除此记录" data-action="delete" data-id="${escapeHtml(s.session_id)}">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+          <div class="session-item-meta">
+            <span>${escapeHtml(s.updated_at ? s.updated_at.slice(5, 16) : '')}</span>
+            <span class="session-badge">${s.turn_count || 1} 轮对话</span>
+          </div>
         </div>
       `
         )
         .join("");
+
+      // 绑定每个卡片的点击事件
+      sessionsContainer.querySelectorAll(".session-item").forEach((card) => {
+        card.addEventListener("click", (e) => {
+          const btn = e.target.closest("button");
+          if (btn) {
+            const act = btn.dataset.action;
+            const sid = btn.dataset.id;
+            if (act === "download") {
+              downloadSession(sid);
+            } else if (act === "delete") {
+              deleteSession(sid);
+            }
+            return;
+          }
+          const sid = card.dataset.id;
+          if (sid) openSession(sid);
+        });
+      });
     } catch (e) {
-      itinerariesContainer.innerHTML = '<div class="empty-state">加载归档文件异常</div>';
+      sessionsContainer.innerHTML = '<div class="empty-state">加载历史会话异常</div>';
+    }
+  }
+
+  /**
+   * 打开并接续历史会话
+   */
+  async function openSession(sessionId) {
+    if (!sessionId) return;
+    try {
+      const resp = await fetch(`/api/session?id=${encodeURIComponent(sessionId)}`);
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "加载会话失败");
+
+      currentSessionId = sessionId;
+
+      // 清空聊天舞台并重新渲染此会话的所有轮次
+      chatStream.innerHTML = "";
+
+      const turns = data.turns || [];
+      if (turns.length === 0) {
+        startNewSession(false);
+        return;
+      }
+
+      for (const turn of turns) {
+        appendUserMessage(turn.user_prompt, turn.timestamp ? turn.timestamp.slice(11, 19) : null);
+        appendArchivedAssistantTurn(turn);
+      }
+
+      // 高亮当前会话卡片
+      sessionsContainer.querySelectorAll(".session-item").forEach((c) => {
+        c.classList.toggle("active", c.dataset.id === sessionId);
+      });
+
+      scrollToBottom();
+      chatTextarea.focus();
+    } catch (e) {
+      alert("打开历史会话失败: " + e.message);
+    }
+  }
+
+  /**
+   * 渲染已归档的历史助手消息（含工具卡片与排版）
+   */
+  function appendArchivedAssistantTurn(turn) {
+    const row = document.createElement("div");
+    row.className = "chat-message assistant";
+
+    let toolsHtml = "";
+    if (turn.step_traces && turn.step_traces.length > 0) {
+      toolsHtml = '<div class="live-trace-box" style="margin-bottom:8px;">';
+      turn.step_traces.forEach((st) => {
+        const toolName = st.action || "mcp_tool";
+        const isErr = st.is_error || false;
+        const icon = isErr ? "fa-triangle-exclamation" : "fa-circle-check";
+        const colorClass = isErr ? "error" : "success";
+        const obsPreview = st.observation
+          ? escapeHtml(st.observation.slice(0, 160)) + (st.observation.length > 160 ? "..." : "")
+          : "";
+        toolsHtml += `
+          <div class="tool-call-card ${colorClass}" style="margin-bottom:6px; opacity:0.95;">
+            <div class="tool-call-header">
+              <i class="fa-solid ${icon}"></i>
+              <span class="tool-call-name">已调用工具: ${escapeHtml(toolName)}</span>
+              <span class="tool-status-badge ${colorClass}">${isErr ? "反馈异常" : "执行成功"}</span>
+            </div>
+            ${obsPreview ? `<div class="tool-call-result-preview">${obsPreview}</div>` : ""}
+          </div>
+        `;
+      });
+      toolsHtml += "</div>";
+    }
+
+    row.innerHTML = `
+      <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
+      <div class="msg-bubble">
+        ${toolsHtml}
+        <div class="msg-text final-answer">${formatMarkdown(turn.assistant_response)}</div>
+        <div class="msg-timestamp">${turn.timestamp ? turn.timestamp.slice(11, 19) : getCurrentTime()}</div>
+      </div>
+    `;
+    chatStream.appendChild(row);
+  }
+
+  /**
+   * 新建全新会话
+   */
+  async function startNewSession(requestBackend = true) {
+    try {
+      if (requestBackend) {
+        const resp = await fetch("/api/session/new", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: "新旅游行程规划" }),
+        });
+        const data = await resp.json();
+        currentSessionId = data.session_id;
+      }
+    } catch (e) {
+      currentSessionId = null;
+    }
+
+    // 重置聊天舞台为欢迎指引
+    chatStream.innerHTML = `
+      <div class="welcome-guide">
+        <div class="guide-badge">
+          <i class="fa-solid fa-compass"></i> 专业一站式旅游规划智能体
+        </div>
+        <h2>您好，我是您的专属 TravelAgent 出行管家</h2>
+        <p class="guide-subtitle">
+          请在下方输入您的<b>目的地、出行人数、时间点约束</b>（如：<i>“周六下午3点必须到达广州塔”</i>），
+          我将自动调度 MCP 天气、交通接驳与景点美食知识库，为您量身定制一条龙深度攻略。
+        </p>
+        <div class="quick-prompts">
+          <div class="prompt-chip" data-text="帮我规划广州2日游，全程坐地铁，周六下午3点必须到广州塔登塔，预算适中，想吃老字号粤菜早茶">
+            <span class="chip-icon">🗼</span>
+            <div class="chip-content">
+              <strong>广州2日地铁深度游</strong>
+              <small>周六15:00广州塔登塔 · 地道西关早茶</small>
+            </div>
+          </div>
+          <div class="prompt-chip" data-text="从广州大学城出发去深圳湾公园看海，下午3点前到达，晚上返回广州，优先公交地铁，推荐沿途美食">
+            <span class="chip-icon">🌊</span>
+            <div class="chip-content">
+              <strong>广州大学城 ➔ 深圳湾公园</strong>
+              <small>跨城通勤接驳 · 15:00前必达 · 沿途地道风味</small>
+            </div>
+          </div>
+          <div class="prompt-chip" data-text="带父母游览北京3天2晚，行程平缓不走回头路，必去故宫颐和园，优先打车网约车，推荐烤鸭老字号">
+            <span class="chip-icon">🏯</span>
+            <div class="chip-content">
+              <strong>北京3天孝亲悠闲游</strong>
+              <small>故宫颐和园无障碍预约 · 老字号四季民福烤鸭</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 重新挂载灵感卡片点击事件
+    chatStream.querySelectorAll(".prompt-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        chatTextarea.value = chip.dataset.text;
+        chatTextarea.focus();
+        triggerSend();
+      });
+    });
+
+    loadSessions();
+    chatTextarea.focus();
+  }
+
+  /**
+   * 导出下载会话记录为 Markdown
+   */
+  function downloadSession(sessionId) {
+    const targetId = sessionId || currentSessionId;
+    if (!targetId) {
+      alert("当前暂无可导出的对话记录，请先在下方发送旅游诉求开始规划！");
+      return;
+    }
+    window.open(`/api/session/download?id=${encodeURIComponent(targetId)}`, "_blank");
+  }
+
+  /**
+   * 删除指定会话记录
+   */
+  async function deleteSession(sessionId) {
+    if (!sessionId) return;
+    if (!confirm("确定要删除这条对话历史记录吗？删除后将无法恢复。")) return;
+
+    try {
+      const resp = await fetch("/api/session/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "删除失败");
+
+      if (currentSessionId === sessionId) {
+        startNewSession();
+      } else {
+        loadSessions();
+      }
+    } catch (e) {
+      alert("删除失败: " + e.message);
     }
   }
 

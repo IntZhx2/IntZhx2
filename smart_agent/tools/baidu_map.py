@@ -5,6 +5,7 @@
 """
 
 import os
+import re
 import json
 import urllib.parse
 import urllib.request
@@ -138,21 +139,21 @@ class BaiduMapClient:
             cost_val = best.get("price", 0)
             cost_str = f"{cost_val} 元 / 人" if cost_val else "约 2~7 元 (以实际购票为准)"
 
-            # 提取线路换乘关键节点
+            # 提取线路换乘关键节点与乘车指引
             steps_desc = []
             for step_group in best.get("steps", []):
                 for step in step_group:
-                    vehicle = step.get("vehicle_info", {})
-                    detail = vehicle.get("detail", {})
-                    name = detail.get("name")
-                    if name:
-                        steps_desc.append(f"搭乘【{name}】")
-                    elif step.get("instruction"):
-                        instr = step.get("instruction")
-                        if "步行" in instr or "换乘" in instr or "到达" in instr:
-                            steps_desc.append(instr)
+                    vehicle = step.get("vehicle_info") or {}
+                    v_name = vehicle.get("detail", {}).get("name") if isinstance(vehicle, dict) else ""
+                    raw_instr = step.get("instructions") or step.get("instruction") or (f"搭乘【{v_name}】" if v_name else "")
+                    clean_instr = re.sub(r"<[^>]+>", "", raw_instr).strip()
+                    if clean_instr:
+                        steps_desc.append(clean_instr)
 
-            route_summary = " ➔ ".join(steps_desc[:5]) if steps_desc else "按照地铁/公交站内导向指引乘车"
+            # 优先筛选乘车、换乘线路，去除首尾无关痛痒的小距离步行
+            ride_steps = [s for s in steps_desc if ("乘" in s or "换乘" in s or "线" in s or "搭乘" in s)]
+            display_steps = ride_steps if ride_steps else steps_desc[:5]
+            route_summary = " ➔ ".join(display_steps[:5]) if display_steps else "按照地铁/公交站内导向指引乘车"
 
             return True, {
                 "duration": f"约 {duration_min} 分钟",
@@ -184,10 +185,20 @@ class BaiduMapClient:
             else:
                 cost_str = f"油费/电费约 {round(distance_km * 0.7)} 元 (全程约 {distance_km} 公里)"
 
+            # 提取主要路段行驶指引
+            driving_steps = []
+            for step in best.get("steps", []):
+                raw_instr = step.get("instructions") or step.get("instruction") or ""
+                clean_instr = re.sub(r"<[^>]+>", "", raw_instr).strip()
+                if clean_instr and any(k in clean_instr for k in ["路", "高速", "大道", "高架", "快速路", "桥"]):
+                    driving_steps.append(clean_instr)
+
+            route_summary = " ➔ ".join(driving_steps[:4]) if driving_steps else f"沿主干道及城市快速路行驶，全程约 {distance_km} 公里"
+
             return True, {
                 "duration": f"约 {duration_min} 分钟 (全程约 {distance_km} km)",
                 "cost": cost_str,
-                "route": f"沿主干道及城市快速路行驶，全程约 {distance_km} 公里",
+                "route": route_summary,
                 "tip": "早晚高峰主干道通行车流较大，建议提前留意实时导航避堵路线。",
             }, ""
 

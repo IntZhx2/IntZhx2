@@ -29,7 +29,7 @@ DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "gemini-3.8-flash-high")
 # 1. 环境变量: export BAIDU_MAPS_AK="your_plain_ak"
 # 2. 内置加密密文: 由 smart_agent/utils/encrypt_key.py 生成的高熵不可逆密文
 BAIDU_MAPS_AK_ENV = os.environ.get("BAIDU_MAPS_AK", "")
-ENCRYPTED_BAIDU_AK = os.environ.get("ENCRYPTED_BAIDU_AK", "-va6m6JD)Y0+}a_cY@hOD1cPX_g$O}<6S@yOF27w>UQX4")
+ENCRYPTED_BAIDU_AK = os.environ.get("ENCRYPTED_BAIDU_AK", "73@z~IShveNs1bSX3q0}Fs6OP-g3J%!2wY-LIz=L`~to+")
 
 # 智能体 ReAct 循环与记忆预算
 MAX_REACT_TURNS = 6

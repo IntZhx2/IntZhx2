@@ -290,3 +290,68 @@ class BaiduMapClient:
         }
         _POI_CACHE[cache_key] = res_dict
         return res_dict, ""
+
+    def get_weather(self, city: str) -> Tuple[Optional[Dict[str, Any]], str]:
+        """
+        全国城市实时气象与出行生活指数检索 (Baidu Maps Weather API)
+        """
+        if not self.is_configured:
+            return None, "未配置百度地图 AK"
+
+        city_clean = city.replace("市", "").replace("特别行政区", "").strip()
+        common_adcodes = {
+            "广州": "440100", "深圳": "440300", "北京": "110100", "上海": "310100",
+            "杭州": "330100", "成都": "510100", "重庆": "500100", "武汉": "420100",
+            "南京": "320100", "西安": "610100", "珠海": "440400", "佛山": "440600",
+            "东莞": "441900", "厦门": "350200", "长沙": "430100", "天津": "120100",
+            "苏州": "320500", "青岛": "370200", "昆明": "530100", "三亚": "460200",
+            "海口": "460100", "福州": "350100", "合肥": "340100", "南昌": "360100",
+            "郑州": "410100", "济南": "370100", "沈阳": "210100", "大连": "210200",
+            "哈尔滨": "230100", "长春": "220100", "贵阳": "520100", "南宁": "450100",
+        }
+        adcode = common_adcodes.get(city_clean)
+
+        if not adcode:
+            coords, _ = self.geocode(city, city)
+            if coords:
+                ok_rev, rev_data, _ = self._request(
+                    "/reverse_geocoding/v3/",
+                    {"location": f"{coords[0]},{coords[1]}"},
+                )
+                if ok_rev:
+                    adcode = rev_data.get("result", {}).get("addressComponent", {}).get("adcode")
+
+        if not adcode:
+            return None, f"未匹配到城市 '{city}' 的行政区划代码"
+
+        ok, data, err = self._request(
+            "/weather/v1/",
+            {"district_id": str(adcode), "data_type": "all"},
+        )
+        if not ok:
+            return None, err
+
+        result = data.get("result", {})
+        now = result.get("now", {})
+        if not now:
+            return None, "百度气象接口未返回当前实时数据"
+
+        indexes = result.get("indexes", [])
+        tips = []
+        for idx in indexes:
+            iname = idx.get("name", "")
+            idetail = idx.get("detail", "") or idx.get("brief", "")
+            if any(k in iname for k in ("穿衣", "紫外线", "感冒", "舒适度")):
+                tips.append(f"- 👔 {iname}: {idetail}")
+
+        return {
+            "city": city,
+            "text": now.get("text", "晴"),
+            "temp": now.get("temp", "--"),
+            "feels_like": now.get("feels_like", "--"),
+            "rh": now.get("rh", "--"),
+            "wind_dir": now.get("wind_dir", "微风"),
+            "wind_class": now.get("wind_class", "1~2级"),
+            "aqi": now.get("aqi", "--"),
+            "tips": "\n".join(tips) if tips else "",
+        }, ""

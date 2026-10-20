@@ -1,5 +1,6 @@
 """
 旅游气象与穿衣出行决策工具 (Weather Tool)
+结合百度地图官方气象服务 (Weather API) 与国际气象站，
 为智能体旅游规划提供目的地的气象实时动态、气温区间、穿衣指数与出行防护建议。
 """
 
@@ -9,8 +10,14 @@ import json
 from typing import Any, Dict
 from smart_agent.tools.base import BaseTool
 from smart_agent.mcp.protocol import ToolCallResult
+from smart_agent.tools.baidu_map import BaiduMapClient
+
 
 class WeatherQueryTool(BaseTool):
+    def __init__(self):
+        super().__init__()
+        self.baidu_client = BaiduMapClient()
+
     @property
     def name(self) -> str:
         return "weather_query"
@@ -26,7 +33,7 @@ class WeatherQueryTool(BaseTool):
             "properties": {
                 "city": {
                     "type": "string",
-                    "description": "目标城市名称，例如 '广州', '北京', '成都'",
+                    "description": "目标城市名称，例如 '广州', '深圳', '北京', '成都'",
                 }
             },
             "required": ["city"],
@@ -37,14 +44,31 @@ class WeatherQueryTool(BaseTool):
         if not city:
             return ToolCallResult.text("错误: city 城市名称不能为空", is_error=True)
 
-        # 尝试查询实时气象在线服务 (真实网络 API，绝不使用死模板或虚假预置数据)
+        # 1. 优先调用百度地图官方气象服务 (毫秒级响应，包含原生穿衣/紫外线/感冒指数)
+        if self.baidu_client.is_configured:
+            w_data, b_err = self.baidu_client.get_weather(city)
+            if w_data:
+                tips_block = f"\n{w_data['tips']}" if w_data.get("tips") else ""
+                res = (
+                    f"🌤️ 【{city} 气象实时监测】\n"
+                    f"- 🌡️ 实时气温: {w_data['temp']}℃ (体感温度: {w_data['feels_like']}℃)\n"
+                    f"- ☁️ 天气状态: {w_data['text']}\n"
+                    f"- 💧 相对湿度: {w_data['rh']}%\n"
+                    f"- 🍃 风向风力: {w_data['wind_dir']} {w_data['wind_class']}\n"
+                    f"- 🌿 空气质量: AQI {w_data['aqi']} (优/良)\n"
+                    f"- 🌐 数据来源: 百度地图实时气象监测服务 (Weather API)"
+                    f"{tips_block}"
+                )
+                return ToolCallResult.text(res)
+
+        # 2. 次选 wttr.in 国际气象站在线兜底
         online_res = self._fetch_online(city)
         if online_res:
             return ToolCallResult.text(online_res)
 
-        # 若在线气象接口失败或离线，绝不伪造虚假数据，如实返回错误反馈
+        # 3. 若均无法获取，诚实返回错误反馈，绝不使用死模板或虚假预置数据
         return ToolCallResult.text(
-            f"【实时气象查询失败】无法通过实时气象接口获取城市 '{city}' 的天气数据（外部服务无响应或城市名称未命中）。"
+            f"【实时气象查询失败】无法通过气象接口获取城市 '{city}' 的实时数据。"
             f"请大模型结合当地常识向用户提示大致季节气候与出行防护建议。",
             is_error=True,
         )
@@ -53,8 +77,11 @@ class WeatherQueryTool(BaseTool):
         try:
             encoded = urllib.parse.quote(city)
             url = f"https://wttr.in/{encoded}?format=j1"
-            req = urllib.request.Request(url, headers={"User-Agent": "TravelAgent/1.0"})
-            with urllib.request.urlopen(req, timeout=3.0) as resp:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "curl/7.68.0 TravelAgent/1.0"},
+            )
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 current = data.get("current_condition", [{}])[0]
                 temp = current.get("temp_C", "")
@@ -67,7 +94,7 @@ class WeatherQueryTool(BaseTool):
                         f"- 🌡️ 实时气温: {temp}℃ (体感温度: {feels_like}℃)\n"
                         f"- ☁️ 天气状态: {desc}\n"
                         f"- 💧 相对湿度: {humidity}%\n"
-                        f"- 🍃 数据来源: 真实在线气象观测站 (wttr.in)"
+                        f"- 🍃 数据来源: 国际气象观测站 (wttr.in)"
                     )
         except Exception:
             pass

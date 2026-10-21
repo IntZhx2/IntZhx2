@@ -218,30 +218,19 @@ body {
   border-bottom: 1px solid var(--border-subtle);
 }
 
-.sidebar-section.flex-1 {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 侧边栏历史会话专区 */
+/* 侧边栏历史会话专区：不限制高度，随侧边栏整体平滑下滑滚动 */
 .sidebar-history-section {
   display: flex;
   flex-direction: column;
-  max-height: 320px;
-  min-height: 180px;
-  padding: 16px 18px;
-  background-color: #fafbfc;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 18px 20px 30px;
+  background-color: transparent;
+  border-bottom: none;
 }
 
 .sidebar-history-section .itinerary-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  overflow-y: auto;
-  flex: 1;
-  padding-right: 4px;
 }
 
 .btn-sidebar-new {

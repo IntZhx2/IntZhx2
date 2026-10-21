@@ -186,6 +186,10 @@ class SmartAgent:
             self.memory.add_assistant_message(final_answer)
             _emit(AgentStepTrace(step_type="answer", content=final_answer))
 
+        # 5. 清理本轮 ReAct 过程中的工具中间报文，压缩为纯净的 user -> assistant 对
+        # 彻底解决不同大模型（如 DeepSeek 与 Gemini）之间 tool_calls 协议与格式冲突
+        self.memory.compact_last_turn(user_input, final_answer)
+
         return AgentRunResult(
             answer=final_answer,
             traces=traces,

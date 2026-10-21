@@ -91,19 +91,57 @@ class ConversationMemory:
         return display_history
 
     def _trim_window(self):
-        """保持滑动窗口预算，保留系统提示词，修剪最旧的历史记录"""
+        """保持滑动窗口预算，保留系统提示词，修剪最旧历史，并保证第一条非系统消息必为 user"""
         if len(self._messages) <= self.window_size + 1:
             return
 
         sys_msg = self._messages[0]
-        # 保留最近 window_size 条记录
         recent = self._messages[-self.window_size:]
+
+        # 确保截断后的首条消息必为 user，彻底杜绝孤立的 assistant 或 tool 消息引发模型 400 校验异常
+        while recent and recent[0].role != "user":
+            recent.pop(0)
+
         self._messages = [sys_msg] + recent
+
+    def compact_last_turn(self, user_input: str, assistant_response: str):
+        """将一轮 ReAct 执行后的消息流压缩为纯净的 user -> assistant 对，剔除中间易引起跨模型冲突的工具碎片"""
+        clean_msgs = []
+        for m in self._messages:
+            if m.role == "system":
+                clean_msgs.append(m)
+            elif m.role in ("user", "assistant") and not m.tool_calls and not m.tool_call_id:
+                clean_msgs.append(m)
+
+        has_last_user = any(m.role == "user" and m.content == user_input for m in clean_msgs[-2:])
+        if not has_last_user:
+            clean_msgs.append(Message(role="user", content=user_input))
+
+        has_last_asst = any(m.role == "assistant" and m.content == assistant_response for m in clean_msgs[-1:])
+        if not has_last_asst:
+            clean_msgs.append(Message(role="assistant", content=assistant_response))
+
+        self._messages = clean_msgs
+        self._trim_window()
 
     def clear(self):
         """清空当前会话历史"""
         self._messages = []
         self._init_system_prompt()
+
+    def load_from_turns(self, turns: List[Dict[str, Any]]):
+        """从历史交互轮次重构高纯度、100% 跨模型兼容的对话上下文"""
+        self.clear()
+        if not turns:
+            return
+        for turn in turns:
+            u_prompt = (turn.get("user_prompt") or "").strip()
+            a_resp = (turn.get("assistant_response") or "").strip()
+            if u_prompt:
+                self._messages.append(Message(role="user", content=u_prompt))
+            if a_resp:
+                self._messages.append(Message(role="assistant", content=a_resp))
+        self._trim_window()
 
     def load_from_messages(self, messages_data: List[Dict[str, Any]]):
         """直接从字典列表恢复内存消息"""

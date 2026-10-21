@@ -169,9 +169,9 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             if not session_data:
                 self._send_json(404, {"error": f"未找到会话 {sess_id}"})
                 return
-            # 激活该会话并将其完整消息注入内存上下文（实现无缝接续对话）
+            # 激活该会话并将其完整消息注入内存上下文（实现无缝接续对话，纯净文本跨模型100%兼容）
             AgentServiceHolder.current_session_id = sess_id
-            AgentServiceHolder.memory.load_from_messages(session_data.get("llm_messages", []))
+            AgentServiceHolder.memory.load_from_turns(session_data.get("turns", []))
             self._send_json(200, session_data)
             return
 
@@ -248,11 +248,11 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 AgentServiceHolder.current_session_id = session_id
                 AgentServiceHolder.memory.clear()
             else:
-                # 恢复指定历史会话上下文
+                # 恢复指定历史会话上下文（基于历史轮次重构，跨模型完全兼容）
                 exist_sess = SessionManager.get_session(session_id)
                 if exist_sess and AgentServiceHolder.current_session_id != session_id:
                     AgentServiceHolder.current_session_id = session_id
-                    AgentServiceHolder.memory.load_from_messages(exist_sess.get("llm_messages", []))
+                    AgentServiceHolder.memory.load_from_turns(exist_sess.get("turns", []))
 
             is_stream = payload.get("stream", True)
             if not is_stream:

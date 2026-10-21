@@ -58,6 +58,17 @@ def simulate_http_request(method: str, path: str, body: dict = None) -> tuple:
 class TestTravelWebServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        from smart_agent.web.server import CONFIG_FILE
+        cls._orig_config_bytes = CONFIG_FILE.read_bytes() if CONFIG_FILE.exists() else None
+        AgentServiceHolder.initialize()
+
+    @classmethod
+    def tearDownClass(cls):
+        from smart_agent.web.server import CONFIG_FILE
+        if cls._orig_config_bytes is not None:
+            CONFIG_FILE.write_bytes(cls._orig_config_bytes)
+        elif CONFIG_FILE.exists():
+            CONFIG_FILE.unlink()
         AgentServiceHolder.initialize()
 
     def test_status_endpoint(self):

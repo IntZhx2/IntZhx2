@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TravelAgent · 智行一条龙旅游规划智能体 (MCP 驱动)</title>
-  <link rel="stylesheet" href="/style.css?v=20261023_final_v6" />
+  <link rel="stylesheet" href="/style.css?v=20261023_layout_v7" />
   <!-- FontAwesome 图标库 & 优雅字体 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,30 +58,10 @@
 
     <!-- 主体容器 -->
     <div class="workspace">
-      <!-- 左侧边栏：对话历史记录置顶展示 -->
+      <!-- 左侧边栏：出行要素快捷组合与对话历史记录 -->
       <aside class="sidebar">
-        <!-- 侧边栏置顶：对话历史记录 -->
-        <div class="sidebar-section sidebar-history-section">
-          <div class="section-title">
-            <div style="display:flex; align-items:center; gap:6px;">
-              <i class="fa-solid fa-clock-rotate-left"></i>
-              <span>对话历史记录</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:4px;">
-              <button class="btn-text-action" id="btn-sidebar-new-chat" title="新建会话"><i class="fa-solid fa-plus"></i></button>
-              <button class="btn-text-action" id="btn-refresh-sessions" title="刷新历史列表"><i class="fa-solid fa-rotate-right"></i></button>
-            </div>
-          </div>
-          <button class="btn-sidebar-new" id="btn-sidebar-new-chat-top">
-            <i class="fa-solid fa-plus"></i> 新建旅游对话
-          </button>
-          <div class="itinerary-list" id="sessions-container">
-            <div class="empty-state">暂无历史对话，开启规划后将自动保存在此</div>
-          </div>
-        </div>
-
-        <!-- 侧边栏：行程要素向导表单 -->
-        <div class="sidebar-section flex-1">
+        <!-- 侧边栏：行程要素向导快捷组合表单 -->
+        <div class="sidebar-section">
           <div class="section-title">
             <i class="fa-solid fa-sliders"></i>
             <span>行程要素快捷组合</span>
@@ -129,16 +109,23 @@
           </div>
         </div>
 
-        <!-- MCP 工具状态指示 -->
-        <div class="mcp-toolkit-card">
-          <div class="toolkit-header">
-            <span><i class="fa-solid fa-microchip"></i> MCP 旅游专属工具链</span>
+        <!-- 侧边栏：对话历史记录 (已挪至快捷组合下方，不限高度，随侧边栏整体下滑) -->
+        <div class="sidebar-section sidebar-history-section">
+          <div class="section-title">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <i class="fa-solid fa-clock-rotate-left"></i>
+              <span>对话历史记录</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button class="btn-text-action" id="btn-sidebar-new-chat" title="新建会话"><i class="fa-solid fa-plus"></i></button>
+              <button class="btn-text-action" id="btn-refresh-sessions" title="刷新历史列表"><i class="fa-solid fa-rotate-right"></i></button>
+            </div>
           </div>
-          <div class="toolkit-tags">
-            <span class="tool-tag" title="实时查询目的地气温与穿衣指数">weather_query</span>
-            <span class="tool-tag" title="计算起点至终点的换乘与耗时">traffic_transit</span>
-            <span class="tool-tag" title="深度景点门票预约与周边招牌美食">attraction_info</span>
-            <span class="tool-tag" title="保存行程方案至 Markdown 文件">itinerary_save</span>
+          <button class="btn-sidebar-new" id="btn-sidebar-new-chat-top">
+            <i class="fa-solid fa-plus"></i> 新建旅游对话
+          </button>
+          <div class="itinerary-list" id="sessions-container">
+            <div class="empty-state">暂无历史对话，开启规划后将自动保存在此</div>
           </div>
         </div>
       </aside>
@@ -281,7 +268,7 @@
   </div>
 
   <!-- 前端逻辑引入 -->
-  <script src="/speech.js?v=20261023_final_v6"></script>
-  <script src="/app.js?v=20261023_final_v6"></script>
+  <script src="/speech.js?v=20261023_layout_v7"></script>
+  <script src="/app.js?v=20261023_layout_v7"></script>
 </body>
 </html>

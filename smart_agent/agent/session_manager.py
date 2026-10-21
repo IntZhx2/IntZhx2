@@ -158,7 +158,7 @@ class SessionManager:
         md = [
             f"# 🎒 {title}",
             f"> 📅 会话创建: `{created_at}` | 最近更新: `{updated_at}` | 交互轮次: `{len(turns)}` 轮",
-            f"> 🤖 智能体驱动: **TravelAgent (GDUT CS Class 5-6)**",
+            f"> 🤖 旅行规划助手: **TravelAgent**",
             "\n---\n",
         ]
 

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TravelAgent · 智行一条龙旅游规划智能体 (MCP 驱动)</title>
-  <link rel="stylesheet" href="/style.css?v=20261023_layout_v7" />
+  <link rel="stylesheet" href="/style.css?v=20261023_clean_v8" />
   <!-- FontAwesome 图标库 & 优雅字体 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,22 +20,15 @@
           <i class="fa-solid fa-compass"></i>
         </div>
         <div class="brand-text">
-          <h1>TravelAgent <span class="brand-tag">智游专属版</span></h1>
-          <p class="brand-sub">景点 · 交通 · 美食 · 严格时间约束一条龙深度定制</p>
-        </div>
-      </div>
-
-      <div class="navbar-center">
-        <div class="team-tag" title="广东工业大学 24 计科 6班">
-          <i class="fa-solid fa-user-group"></i>
-          <span>赵海翔 (3124004113) · 何卓文 (3124004132) · 吴与同 (3124004018)</span>
+          <h1>TravelAgent</h1>
+          <p class="brand-sub">景点 · 交通 · 美食 · 个性化行程定制</p>
         </div>
       </div>
 
       <div class="navbar-actions">
         <div class="status-pill" id="agent-status-pill">
           <span class="status-circle"></span>
-          <span class="status-label" id="status-label">正在检查 API 状态...</span>
+          <span class="status-label" id="status-label">正在检查服务状态...</span>
         </div>
 
         <button class="nav-btn" id="btn-top-new-chat" title="开启全新旅游规划对话">
@@ -94,8 +87,8 @@
             </div>
 
             <div class="form-item">
-              <label><i class="fa-solid fa-clock"></i> 必达时间点约束 (核心亮点)：</label>
-              <input type="text" id="guide-constraint" placeholder="如：周六下午3点必须到达广州塔" value="周六下午15:00必须到达广州塔登塔" />
+              <label><i class="fa-solid fa-clock"></i> 特定时间与地点安排：</label>
+              <input type="text" id="guide-constraint" placeholder="如：周六下午15:00安排去广州塔" value="周六下午15:00去广州塔登塔" />
             </div>
 
             <div class="form-item">
@@ -104,7 +97,7 @@
             </div>
 
             <button class="btn-generate-itinerary" id="btn-quick-generate">
-              <i class="fa-solid fa-wand-magic-sparkles"></i> 一键生成一条龙攻略
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 生成定制行程方案
             </button>
           </div>
         </div>
@@ -135,10 +128,10 @@
         <!-- 灵感快捷点选条 -->
         <div class="inspiration-bar">
           <span class="inspiration-title"><i class="fa-regular fa-lightbulb"></i> 灵感示例：</span>
-          <button class="prompt-chip" data-text="我要去广州玩2天，以地铁出行为主，周六下午3点必须在广州塔登塔，请为我制定包含景点、换乘指引和地道美食的一条龙攻略。">
-            📍 广州2日游 (周六15:00广州塔约束)
+          <button class="prompt-chip" data-text="我要去广州玩2天，以地铁出行为主，周六下午15:00去广州塔登塔，请为我制定包含景点、换乘指引和地道美食的行程方案。">
+            📍 广州2日游 (周六15:00广州塔)
           </button>
-          <button class="prompt-chip" data-text="规划一份杭州2天出行方案，自驾出行，周日上午10点必须到达灵隐寺祈福，晚上去西湖看音乐喷泉，推荐必吃杭帮菜。">
+          <button class="prompt-chip" data-text="规划一份杭州2天出行方案，自驾出行，周日上午10点前往灵隐寺，晚上去西湖看音乐喷泉，推荐特色杭帮菜。">
             📍 杭州西湖与灵隐 (周日10:00灵隐寺)
           </button>
           <button class="prompt-chip" data-text="成都3天2晚旅游攻略，高铁到达成都东站，要求包含大熊猫繁育基地和宽窄巷子，推荐地道火锅和小吃。">
@@ -153,26 +146,26 @@
             <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
             <div class="msg-bubble">
               <div class="welcome-banner">
-                <h3>您好！我是您的专属旅游规划智能体 <strong>TravelAgent</strong></h3>
-                <p>基于 <strong>Model Context Protocol (MCP)</strong> 标准协议构建，通过连接在线大模型与专用旅游工具链，为您提供<strong>“景点 + 交通 + 美食”</strong>一条龙闭环定制方案：</p>
+                <h3>您好！我是您的旅游规划助手 <strong>TravelAgent</strong></h3>
+                <p>为您整合<strong>“景点 + 交通 + 美食”</strong>，结合实时气象与交通数据生成定制旅行方案：</p>
                 <div class="welcome-features">
                   <div class="feat-box">
                     <i class="fa-solid fa-location-crosshairs"></i>
-                    <h4>严格时间约束</h4>
-                    <p>支持指定“几点必须在什么地方”，精准逆推交通与游览耗时</p>
+                    <h4>时间节点规划</h4>
+                    <p>支持指定特定时间到达某地，合理规划交通与游览用时</p>
                   </div>
                   <div class="feat-box">
                     <i class="fa-solid fa-route"></i>
-                    <h4>无缝交通换乘</h4>
-                    <p>按您的出行偏好规划地铁线路、打车耗时与站点避堵贴士</p>
+                    <h4>交通路线换乘</h4>
+                    <p>按您的出行偏好规划地铁线路、打车耗时与换乘指引</p>
                   </div>
                   <div class="feat-box">
                     <i class="fa-solid fa-bowl-food"></i>
-                    <h4>地道美食打卡</h4>
-                    <p>就近匹配老字号招牌菜品与人均消费，杜绝网红踩坑</p>
+                    <h4>特色美食精选</h4>
+                    <p>就近匹配特色餐厅与招牌菜品，提供地道餐饮建议</p>
                   </div>
                 </div>
-                <p class="welcome-note">💡 请在右上角配置您的真实大模型 API Key（阿里云百炼、DeepSeek、智谱等），即可立即开始规划！</p>
+                <p class="welcome-note">💡 请在右上角配置大模型 API 服务，即可开始规划行程！</p>
               </div>
               <div class="msg-timestamp">TravelAgent 系统就绪</div>
             </div>
@@ -191,7 +184,7 @@
             <textarea
               id="chat-textarea"
               rows="2"
-              placeholder="请输入您的出行计划（例如：目的地、出行天数、交通方式偏好、几点必须在什么地方等）..."
+              placeholder="请输入您的出行计划（例如：目的地、出行天数、交通方式偏好、特定时间地点安排等）..."
             ></textarea>
 
             <div class="input-actions-group">
@@ -206,26 +199,26 @@
             </div>
           </div>
           <div class="input-helper-text">
-            <span>支持自然语言输入任意复杂需求，智能体将自动调用 MCP 气象、路线与景点工具生成时间线攻略</span>
+            <span>支持自然语言输入出行想法，系统将结合气象、路线与景点数据生成行程方案</span>
           </div>
         </div>
       </main>
     </div>
   </div>
 
-  <!-- 强制 API Key 配置模态弹窗 -->
+  <!-- API Key 配置模态弹窗 -->
   <div class="modal-backdrop" id="config-modal">
     <div class="modal-card">
       <div class="modal-title-bar">
-        <h3><i class="fa-solid fa-key"></i> 接入真实在线大语言模型 (强制配置)</h3>
+        <h3><i class="fa-solid fa-key"></i> 模型服务设置</h3>
         <button class="btn-close-modal" id="btn-close-modal"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <div class="modal-inner">
         <div class="modal-alert">
-          <i class="fa-solid fa-circle-exclamation"></i>
+          <i class="fa-solid fa-circle-info"></i>
           <div>
-            <strong>系统已完全关闭本地伪离线模式</strong>：智能体的思考推理、时间约束求解与一条龙攻略生成全部由真实大模型实时驱动，请先配置 API Key。
+            请配置并连接大语言模型服务，系统将通过模型与气象/交通接口为您提供个性化旅行规划。
           </div>
         </div>
 
@@ -233,7 +226,7 @@
         <div class="form-field">
           <label>快速选用服务商：</label>
           <div class="preset-chips">
-            <button class="preset-pill active" data-preset="cpa">💻 本地 CPA (Gemini 推荐)</button>
+            <button class="preset-pill active" data-preset="cpa">💻 本地 CPA</button>
             <button class="preset-pill" data-preset="bailian">🌟 阿里云百炼 (Qwen)</button>
             <button class="preset-pill" data-preset="deepseek">🚀 DeepSeek 官方</button>
             <button class="preset-pill" data-preset="zhipu">💡 智谱 BigModel</button>
@@ -254,21 +247,21 @@
 
         <div class="form-field">
           <label for="input-model">模型代号 (Model Name)：</label>
-          <input type="text" id="input-model" value="deepseek-flash" />
-          <span class="field-tips">模型代号需与服务端一致。DeepSeek 官方请填 <code>deepseek-flash</code> 或 <code>deepseek-v4-pro</code>（勿填营销版本号）；本地 CPA 请填 <code>gemini-3.5-flash-lite</code>。</span>
+          <input type="text" id="input-model" value="gemini-3.8-flash-high" />
+          <span class="field-tips">模型代号需与服务端一致。本地 CPA 请填 <code>gemini-3.8-flash-high</code>；DeepSeek 官方请填 <code>deepseek-flash</code> 或 <code>deepseek-v4-pro</code>。</span>
         </div>
       </div>
 
       <div class="modal-actions-bar">
         <button class="btn-confirm-save" id="btn-save-config">
-          <i class="fa-solid fa-check"></i> 保存并启用真实大模型
+          <i class="fa-solid fa-check"></i> 保存并启用配置
         </button>
       </div>
     </div>
   </div>
 
   <!-- 前端逻辑引入 -->
-  <script src="/speech.js?v=20261023_layout_v7"></script>
-  <script src="/app.js?v=20261023_layout_v7"></script>
+  <script src="/speech.js?v=20261023_clean_v8"></script>
+  <script src="/app.js?v=20261023_clean_v8"></script>
 </body>
 </html>

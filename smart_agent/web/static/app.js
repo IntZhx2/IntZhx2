@@ -45,7 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const PRESETS = {
     cpa: {
       base: "http://127.0.0.1:8317/v1",
-      model: "gemini-3.5-flash-lite",
+      model: "gemini-3.8-flash-high",
       key: "123456",
     },
     bailian: {
@@ -124,7 +124,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const model = inputModel.value.trim();
 
     if (!key) {
-      alert("请输入有效的 API Key！系统已关闭伪离线模式，必须配置真实大模型才能进行智能规划。");
+      alert("请输入有效的 API Key 以连接模型服务。");
       return;
     }
 
@@ -147,7 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("保存失败: " + e.message);
     } finally {
       btnSaveConfig.disabled = false;
-      btnSaveConfig.innerHTML = '<i class="fa-solid fa-check"></i> 保存并启用真实大模型';
+      btnSaveConfig.innerHTML = '<i class="fa-solid fa-check"></i> 保存并启用配置';
     }
   });
 
@@ -169,9 +169,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const pref = guidePref.value.trim();
 
     let prompt = `我想去【${city}】进行【${days}】旅游。\n- 交通偏好：${transit}；`;
-    if (constraint) prompt += `\n- 关键时间点约束：${constraint}；`;
+    if (constraint) prompt += `\n- 特定时间安排：${constraint}；`;
     if (pref) prompt += `\n- 美食与喜好：${pref}；`;
-    prompt += `\n请通过 MCP 工具为我查询最新气象与交通路线，自动生成包含景点门票预约、交通换乘指引和地道美食的一条龙深度定制攻略。`;
+    prompt += `\n请查询相关气象与交通路线，为我生成包含景点游览、交通换乘指引和特色美食的旅行方案。`;
 
     chatTextarea.value = prompt;
     triggerSend();
@@ -238,7 +238,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!text) return;
 
     if (!hasValidApiKey) {
-      alert("⚠️ 请先配置大模型 API Key！\n系统已完全关闭本地伪离线模式，必须连接真实大语言模型才能为您进行智能规划。");
+      alert("请先配置模型 API Key，以便为您生成旅行规划。");
       configModal.classList.add("active");
       inputApiKey.focus();
       return;
@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <div class="live-trace-box"></div>
         <div class="live-status-bar">
           <i class="fa-solid fa-spinner fa-spin"></i>
-          <span class="live-status-text">TravelAgent 正在梳理出行约束并规划行程...</span>
+          <span class="live-status-text">TravelAgent 正在规划行程...</span>
         </div>
         <div class="msg-text final-answer" style="display: none;"></div>
         <div class="msg-timestamp">${getCurrentTime()}</div>
@@ -365,12 +365,12 @@ document.addEventListener("DOMContentLoaded", () => {
         step.className = "live-trace-step thought";
         step.innerHTML = `
           <div class="live-step-header">
-            <span><i class="fa-solid fa-brain"></i> <strong>智能体思考规划</strong></span>
+            <span><i class="fa-solid fa-brain"></i> <strong>思考规划</strong></span>
           </div>
           <div class="live-step-body">${formatMarkdown(content)}</div>
         `;
         traceBox.appendChild(step);
-        statusText.innerText = "正在分析硬性时间约束与游玩要素...";
+        statusText.innerText = "正在分析行程安排与游玩路线...";
         scrollToBottom();
       },
       addToolCall(tool, args, callId) {
@@ -484,7 +484,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (hasValidApiKey) {
         agentStatusPill.className = "status-pill online";
-        statusLabel.innerHTML = `在线大模型 (${data.model})`;
+        statusLabel.innerHTML = `在线模型 (${data.model})`;
       } else {
         agentStatusPill.className = "status-pill offline";
         statusLabel.innerHTML = "未配置 API Key (请点击配置)";
@@ -664,19 +664,19 @@ document.addEventListener("DOMContentLoaded", () => {
     chatStream.innerHTML = `
       <div class="welcome-guide">
         <div class="guide-badge">
-          <i class="fa-solid fa-compass"></i> 专业一站式旅游规划智能体
+          <i class="fa-solid fa-compass"></i> 旅行规划助手
         </div>
-        <h2>您好，我是您的专属 TravelAgent 出行管家</h2>
+        <h2>您好，我是您的 TravelAgent 旅行管家</h2>
         <p class="guide-subtitle">
-          请在下方输入您的<b>目的地、出行人数、时间点约束</b>（如：<i>“周六下午3点必须到达广州塔”</i>），
-          我将自动调度 MCP 天气、交通接驳与景点美食知识库，为您量身定制一条龙深度攻略。
+          请在下方输入您的<b>目的地、出行天数、特定时间安排</b>（如：<i>“周六下午15:00安排去广州塔”</i>），
+          我将结合气象、交通路线与景点信息为您规划合理的旅行行程。
         </p>
         <div class="quick-prompts">
-          <div class="prompt-chip" data-text="帮我规划广州2日游，全程坐地铁，周六下午3点必须到广州塔登塔，预算适中，想吃老字号粤菜早茶">
+          <div class="prompt-chip" data-text="帮我规划广州2日游，全程坐地铁，周六下午15:00去广州塔登塔，预算适中，想吃老字号粤菜早茶">
             <span class="chip-icon">🗼</span>
             <div class="chip-content">
-              <strong>广州2日地铁深度游</strong>
-              <small>周六15:00广州塔登塔 · 地道西关早茶</small>
+              <strong>广州2日地铁游</strong>
+              <small>周六15:00广州塔 · 地道西关早茶</small>
             </div>
           </div>
           <div class="prompt-chip" data-text="从广州大学城出发去深圳湾公园看海，下午3点前到达，晚上返回广州，优先公交地铁，推荐沿途美食">

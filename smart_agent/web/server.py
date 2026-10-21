@@ -235,7 +235,7 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
 
             if not AgentServiceHolder.llm_client.has_valid_key():
                 self._send_json(400, {
-                    "error": "【未配置大模型 API Key】当前系统已关闭伪离线模式，必须接入真实大模型 API！请在【⚙️ API 设置】中配置。"
+                    "error": "未配置大模型 API Key，请在右上角【⚙️ API 设置】中配置以启用智能规划服务。"
                 })
                 return
 

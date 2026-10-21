@@ -13,6 +13,28 @@ from smart_agent.config import API_BASE, API_KEY, DEFAULT_MODEL
 
 logger = logging.getLogger("agent.llm")
 
+# 常见模型代号别名与营销版本号映射字典
+MODEL_ALIASES = {
+    "deepseek-v4.1-flash": "deepseek-flash",
+    "deepseek-v4-flash": "deepseek-flash",
+    "deepseek-v4.1": "deepseek-flash",
+    "deepseek-v4.1-pro": "deepseek-v4-pro",
+    "deepseek-v4-pro": "deepseek-v4-pro",
+}
+
+
+def normalize_model_name(model_name: str) -> str:
+    """自动纠正常见模型代号别名与营销版本号（如 deepseek-v4.1-flash -> deepseek-flash）"""
+    m = (model_name or "").strip()
+    lower = m.lower()
+    if lower in MODEL_ALIASES:
+        return MODEL_ALIASES[lower]
+    if "deepseek" in lower and "4.1" in lower and "flash" in lower:
+        return "deepseek-flash"
+    if "deepseek" in lower and "4.1" in lower and "pro" in lower:
+        return "deepseek-v4-pro"
+    return m
+
 
 class LLMClient:
     """真实在线大语言模型客户端"""
@@ -25,7 +47,7 @@ class LLMClient:
     ):
         self.api_base = api_base.strip()
         self.api_key = api_key.strip()
-        self.model = model.strip()
+        self.model = normalize_model_name(model)
 
     @property
     def normalized_api_base(self) -> str:
@@ -113,6 +135,24 @@ class LLMClient:
                 raise RuntimeError(
                     f"大模型服务端点未找到 (404 Not Found)！请求路径为: {url}。"
                     "若使用本地 CPA 代理，请确保 API 端点为 http://127.0.0.1:8317/v1。"
+                )
+            elif he.code == 400 and ("The supported API model names are" in err_msg or "deepseek-flash" in err_msg):
+                # 针对 DeepSeek 官方或反代要求 deepseek-flash 代号的场景，自动修正并热重试
+                logger.warning("大模型服务端要求使用 deepseek-flash 代号，正在自动重试...")
+                self.model = "deepseek-flash"
+                payload["model"] = "deepseek-flash"
+                data = json.dumps(payload).encode("utf-8")
+                req_retry = urllib.request.Request(url, data=data, headers=headers, method="POST")
+                try:
+                    with urllib.request.urlopen(req_retry, timeout=45.0) as retry_resp:
+                        retry_body = retry_resp.read().decode("utf-8")
+                        retry_res = json.loads(retry_body)
+                        if "choices" in retry_res and retry_res["choices"]:
+                            return retry_res["choices"][0]["message"]
+                except Exception as retry_err:
+                    logger.warning(f"热重试 deepseek-flash 失败: {retry_err}")
+                raise RuntimeError(
+                    f"模型代号格式错误 (HTTP 400): 服务端仅支持 'deepseek-flash' 或 'deepseek-v4-pro'，请在【⚙️ API 设置】中将模型名称调整为 deepseek-flash！"
                 )
             elif he.code == 400 and ("unknown provider" in err_msg or "model_not_found" in err_msg):
                 raise RuntimeError(

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TravelAgent · 智行一条龙旅游规划智能体 (MCP 驱动)</title>
-  <link rel="stylesheet" href="/style.css?v=20261023_final_v5" />
+  <link rel="stylesheet" href="/style.css?v=20261023_final_v6" />
   <!-- FontAwesome 图标库 & 优雅字体 -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -267,7 +267,8 @@
 
         <div class="form-field">
           <label for="input-model">模型代号 (Model Name)：</label>
-          <input type="text" id="input-model" value="gemini-3.5-flash-lite" />
+          <input type="text" id="input-model" value="deepseek-flash" />
+          <span class="field-tips">模型代号需与服务端一致。DeepSeek 官方请填 <code>deepseek-flash</code> 或 <code>deepseek-v4-pro</code>（勿填营销版本号）；本地 CPA 请填 <code>gemini-3.5-flash-lite</code>。</span>
         </div>
       </div>
 
@@ -280,7 +281,7 @@
   </div>
 
   <!-- 前端逻辑引入 -->
-  <script src="/speech.js?v=20261023_final_v5"></script>
-  <script src="/app.js?v=20261023_final_v5"></script>
+  <script src="/speech.js?v=20261023_final_v6"></script>
+  <script src="/app.js?v=20261023_final_v6"></script>
 </body>
 </html>

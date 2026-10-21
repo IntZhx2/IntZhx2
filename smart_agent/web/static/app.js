@@ -55,7 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     deepseek: {
       base: "https://api.deepseek.com/v1",
-      model: "deepseek-chat",
+      model: "deepseek-flash",
       key: "",
     },
     zhipu: {

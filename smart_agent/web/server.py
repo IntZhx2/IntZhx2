@@ -352,7 +352,8 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             if api_base:
                 client.api_base = api_base.strip().rstrip("/")
             if model:
-                client.model = model.strip()
+                from smart_agent.agent.llm_client import normalize_model_name
+                client.model = normalize_model_name(model.strip())
 
             has_key = client.has_valid_key()
             if not has_key:

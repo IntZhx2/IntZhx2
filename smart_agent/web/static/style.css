@@ -224,6 +224,53 @@ body {
   flex-direction: column;
 }
 
+/* 侧边栏历史会话专区 */
+.sidebar-history-section {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  min-height: 180px;
+  padding: 16px 18px;
+  background-color: #fafbfc;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-history-section .itinerary-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  padding-right: 4px;
+}
+
+.btn-sidebar-new {
+  width: 100%;
+  margin-bottom: 10px;
+  background-color: #ffffff;
+  color: var(--morandi-blue);
+  border: 1px dashed var(--morandi-blue);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.btn-sidebar-new:hover {
+  background-color: var(--morandi-blue);
+  color: #ffffff;
+  border-style: solid;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(107, 130, 149, 0.25);
+}
+
 .section-title {
   font-size: 0.84rem;
   font-weight: 600;

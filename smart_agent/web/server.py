@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from pathlib import Path
 from typing import Any, Dict, Optional
-from smart_agent.config import SERVER_HOST, SERVER_PORT, BASE_DIR, WORKSPACE_DIR
+from smart_agent.config import SERVER_HOST, SERVER_PORT, BASE_DIR, WORKSPACE_DIR, DATA_DIR
 from smart_agent.mcp.server import MCPServer
 from smart_agent.mcp.client import MCPClient
 from smart_agent.agent.memory import ConversationMemory
@@ -20,6 +20,9 @@ from smart_agent.tools import create_default_tools
 
 logger = logging.getLogger("web.server")
 STATIC_DIR = BASE_DIR / "web" / "static"
+
+
+CONFIG_FILE = DATA_DIR / "llm_config.json"
 
 
 class AgentServiceHolder:
@@ -39,6 +42,21 @@ class AgentServiceHolder:
 
         cls.mcp_client = MCPClient(cls.mcp_server)
         cls.llm_client = LLMClient()
+
+        # 加载持久化的 API 配置
+        if CONFIG_FILE.exists():
+            try:
+                with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                if cfg.get("api_base"):
+                    cls.llm_client.api_base = cfg["api_base"].strip()
+                if cfg.get("api_key"):
+                    cls.llm_client.api_key = cfg["api_key"].strip()
+                if cfg.get("model"):
+                    cls.llm_client.model = cfg["model"].strip()
+            except Exception as e:
+                logger.warning(f"读取配置失败: {e}")
+
         cls.memory = ConversationMemory(session_id="travel_web_session")
         cls.current_session_id = None
         cls.agent = SmartAgent(
@@ -55,7 +73,13 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=str(STATIC_DIR), **kwargs)
 
     def log_message(self, format, *args):
-        pass
+        print(f"[{self.log_date_time_string()}] {self.command} {self.path} - {format % args}", flush=True)
+
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate, max-age=0")
+        self.send_header("Pragma", "no-cache")
+        self.send_header("Expires", "0")
+        super().end_headers()
 
     def _send_json(self, status_code: int, data: Any):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -216,14 +240,17 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             # 会话 ID 绑定与恢复 (支持多轮接续对话)
-            session_id = payload.get("session_id") or AgentServiceHolder.current_session_id
+            session_id = payload.get("session_id")
             if not session_id:
+                # 用户开启全新对话：初始化新会话，重置上下文记忆
                 new_sess = SessionManager.create_new_session()
                 session_id = new_sess["session_id"]
                 AgentServiceHolder.current_session_id = session_id
-            elif AgentServiceHolder.current_session_id != session_id:
+                AgentServiceHolder.memory.clear()
+            else:
+                # 恢复指定历史会话上下文
                 exist_sess = SessionManager.get_session(session_id)
-                if exist_sess:
+                if exist_sess and AgentServiceHolder.current_session_id != session_id:
                     AgentServiceHolder.current_session_id = session_id
                     AgentServiceHolder.memory.load_from_messages(exist_sess.get("llm_messages", []))
 
@@ -331,6 +358,17 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             if not has_key:
                 self._send_json(400, {"error": "API Key 格式无效或过短，请检查填写的密钥"})
                 return
+
+            # 持久化保存到本地，防止重启服务丢失密钥
+            try:
+                with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "api_base": client.api_base,
+                        "api_key": client.api_key,
+                        "model": client.model,
+                    }, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"持久化保存配置异常: {e}")
 
             self._send_json(200, {
                 "status": "success",

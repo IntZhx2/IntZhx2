@@ -174,16 +174,28 @@ class SessionManager:
 
             if traces:
                 md.append("#### 🛠️ MCP 真实工具调用链记录:")
+                step_idx = 1
                 for step in traces:
-                    st = step.get("step", 1)
-                    thought = step.get("thought", "")
+                    stype = step.get("type") or step.get("step_type", "")
+                    content = step.get("content", "")
+                    details = step.get("details", {}) or {}
                     action = step.get("action", "")
-                    obs = step.get("observation", "")
-                    md.append(f"- **步骤 {st}** (`{action}`): *{thought}*")
-                    if obs:
-                        # 缩进展示工具观测反馈
-                        obs_indented = "\n  ".join(obs.strip().split("\n"))
-                        md.append(f"  ```text\n  {obs_indented}\n  ```")
+
+                    if stype == "thought":
+                        md.append(f"- **🧠 规划思考**: {content}")
+                    elif stype == "tool_call" or (action and not stype):
+                        tool_name = details.get("tool") or action or content
+                        args_str = json.dumps(details.get("arguments", {}), ensure_ascii=False) if details.get("arguments") else ""
+                        md.append(f"- **🔧 执行工具 #{step_idx}** (`{tool_name}`){': ' + args_str if args_str else ''}")
+                        step_idx += 1
+                    elif stype == "tool_result" or step.get("observation"):
+                        tool_name = details.get("tool", "")
+                        obs = content or step.get("observation", "")
+                        is_err = details.get("is_error", False) or step.get("is_error", False)
+                        status_str = "❌ 异常" if is_err else "✅ 成功"
+                        md.append(f"  - **数据反馈 [{tool_name or 'MCP'} {status_str}]**:")
+                        obs_indented = "\n    ".join(obs.strip().split("\n"))
+                        md.append(f"    ```text\n    {obs_indented}\n    ```")
                 md.append("")
 
             md.append("#### 🤖 TravelAgent 深度规划攻略与回复:")

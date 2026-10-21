@@ -15,6 +15,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnRefreshSessions = document.getElementById("btn-refresh-sessions") || document.getElementById("btn-refresh-itineraries");
   const btnTopNewChat = document.getElementById("btn-top-new-chat");
   const btnSidebarNewChat = document.getElementById("btn-sidebar-new-chat");
+  const btnSidebarNewChatTop = document.getElementById("btn-sidebar-new-chat-top");
   const btnDownloadActiveChat = document.getElementById("btn-download-active-chat");
   const agentStatusPill = document.getElementById("agent-status-pill");
   const statusLabel = document.getElementById("status-label");
@@ -81,6 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // 会话操作按钮绑定
   if (btnTopNewChat) btnTopNewChat.addEventListener("click", () => startNewSession());
   if (btnSidebarNewChat) btnSidebarNewChat.addEventListener("click", () => startNewSession());
+  if (btnSidebarNewChatTop) btnSidebarNewChatTop.addEventListener("click", () => startNewSession());
   if (btnRefreshSessions) btnRefreshSessions.addEventListener("click", () => loadSessions());
   if (btnDownloadActiveChat) btnDownloadActiveChat.addEventListener("click", () => downloadSession(currentSessionId));
   if (btnClearChat) btnClearChat.addEventListener("click", () => startNewSession());
@@ -226,8 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 刷新历史会话
-  if (btnRefreshItineraries) btnRefreshItineraries.addEventListener("click", loadSessions);
+  // 会话由 loadSessions() 与 triggerSend() 统一管理驱动
 
   /**
    * 触发行程需求发送与大模型交互
@@ -506,10 +507,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const resp = await fetch("/api/sessions");
       const data = await resp.json();
       const sessions = data.sessions || [];
-
-      if (!currentSessionId && data.active_session_id) {
-        currentSessionId = data.active_session_id;
-      }
+      console.log("[TravelAgent] 加载历史对话列表成功:", sessions);
 
       if (sessions.length === 0) {
         sessionsContainer.innerHTML = '<div class="empty-state">暂无历史对话，开启规划后将自动保存在此，随时可接续</div>';
@@ -519,9 +517,9 @@ document.addEventListener("DOMContentLoaded", () => {
       sessionsContainer.innerHTML = sessions
         .map(
           (s) => `
-        <div class="session-item ${s.session_id === currentSessionId ? 'active' : ''}" data-id="${escapeHtml(s.session_id)}">
+        <div class="session-item ${s.session_id === currentSessionId ? 'active' : ''}" data-id="${escapeHtml(s.session_id)}" title="点击接续此对话: ${escapeHtml(s.title)}">
           <div class="session-item-top">
-            <div class="session-item-title" title="${escapeHtml(s.title)}">💬 ${escapeHtml(s.title)}</div>
+            <div class="session-item-title">💬 ${escapeHtml(s.title)}</div>
             <div class="session-item-actions">
               <button class="session-act-btn" title="导出下载此对话 (.md)" data-action="download" data-id="${escapeHtml(s.session_id)}">
                 <i class="fa-solid fa-download"></i>

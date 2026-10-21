@@ -11,6 +11,9 @@ ans*.txt
 .venv/
 *.db
 smart_agent/data/*.db
+smart_agent/data/llm_config.json
 smart_agent/data/workspace/*
 !smart_agent/data/workspace/.gitkeep
+smart_agent/data/sessions/*
+!smart_agent/data/sessions/.gitkeep
 

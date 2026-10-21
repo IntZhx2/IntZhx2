@@ -112,8 +112,8 @@ class SessionManager:
                 "llm_messages": [],
             }
         else:
-            # 如果是首轮对话且当前还是默认标题，更新为智能提炼标题
-            if not session.get("turns") or session.get("title") in ("新旅游行程规划", "未命名对话"):
+            # 如果当前还是默认未命名标题，更新为根据首轮需求智能提炼的标题
+            if session.get("title") in ("", "新旅游行程规划", "未命名对话"):
                 session["title"] = cls._generate_smart_title(user_prompt)
 
         session["updated_at"] = now_str

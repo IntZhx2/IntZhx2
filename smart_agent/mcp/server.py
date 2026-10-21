@@ -74,6 +74,18 @@ class MCPServer:
             res = self.call_tool(name, arguments)
             return JSONRPCResponse.success(req.id, res.to_dict()).to_dict()
 
+        elif method == "initialize":
+            return JSONRPCResponse.success(req.id, {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                },
+                "serverInfo": {
+                    "name": self.name,
+                    "version": self.version,
+                },
+            }).to_dict()
+
         elif method == "ping":
             return JSONRPCResponse.success(req.id, {"status": "pong", "server": self.name}).to_dict()
 

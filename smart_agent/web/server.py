@@ -385,6 +385,15 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(200, {"status": "cleared", "message": "行程会话上下文已重置"})
             return
 
+        elif path == "/api/mcp":
+            # 外部标准 MCP JSON-RPC 2.0 端点
+            if not payload:
+                self._send_json(400, {"jsonrpc": "2.0", "error": {"code": -32600, "message": "Invalid JSON"}})
+                return
+            response_payload = AgentServiceHolder.mcp_server.handle_request(payload)
+            self._send_json(200, response_payload)
+            return
+
         self._send_json(404, {"error": "Not Found"})
 
 

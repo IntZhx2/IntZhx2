@@ -96,6 +96,13 @@ class TestMCPProtocolAndServer(unittest.TestCase):
         resp = self.server.handle_request(req)
         self.assertEqual(resp["result"]["status"], "pong")
 
+    def test_initialize(self):
+        req = {"jsonrpc": "2.0", "method": "initialize", "id": 105}
+        resp = self.server.handle_request(req)
+        self.assertIn("result", resp)
+        self.assertEqual(resp["result"]["protocolVersion"], "2024-11-05")
+        self.assertEqual(resp["result"]["serverInfo"]["name"], self.server.name)
+
     def test_client_integration(self):
         tools = self.client.get_tools()
         self.assertEqual(len(tools), 1)

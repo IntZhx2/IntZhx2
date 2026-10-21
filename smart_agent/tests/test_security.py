@@ -3,10 +3,18 @@
 """
 
 import unittest
-from smart_agent.utils.security import encrypt_token, decrypt_token
+from smart_agent.utils.security import encrypt_token, decrypt_token, SafeKeyVault
+from smart_agent.security.key_vault import SafeKeyVault as SafeKeyVaultAlias
 
 
 class TestSecurityKeyVault(unittest.TestCase):
+    def test_safe_key_vault_class(self):
+        plain_ak = "test_baidu_ak_class_vault_token"
+        cipher = SafeKeyVault.encrypt_key(plain_ak)
+        self.assertTrue(cipher)
+        self.assertEqual(SafeKeyVault.decrypt_key(cipher), plain_ak)
+        self.assertEqual(SafeKeyVaultAlias.decrypt_key(cipher), plain_ak)
+
     def test_encrypt_decrypt_roundtrip(self):
         plain_ak = "test_baidu_ak_random_token_1234567890abcdef"
         cipher = encrypt_token(plain_ak)

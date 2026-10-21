@@ -126,5 +126,59 @@ class TestTravelWebServer(unittest.TestCase):
             test_file.unlink()
 
 
+    def test_sessions_list_endpoint(self):
+        status, data = simulate_http_request("GET", "/api/sessions")
+        self.assertEqual(status, 200)
+        self.assertIn("sessions", data)
+        self.assertIn("active_session_id", data)
+
+    def test_session_get_and_continuation_endpoint(self):
+        # 创建一个测试会话
+        from smart_agent.agent.session_manager import SessionManager
+        sess = SessionManager.create_new_session("Web端测试广州游")
+        sess_id = sess["session_id"]
+        SessionManager.append_turn(
+            session_id=sess_id,
+            user_prompt="周六下午3点去广州塔",
+            assistant_response="建议14:30到达广州塔",
+            step_traces=[],
+            llm_messages=[],
+        )
+
+        # 1. 正常获取并激活
+        status, data = simulate_http_request("GET", f"/api/session?id={sess_id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(data["session_id"], sess_id)
+        self.assertEqual(len(data["turns"]), 1)
+        self.assertEqual(AgentServiceHolder.current_session_id, sess_id)
+
+        # 2. 缺少参数
+        status, err_data = simulate_http_request("GET", "/api/session")
+        self.assertEqual(status, 400)
+
+        # 3. 不存在的会话
+        status, not_found_data = simulate_http_request("GET", "/api/session?id=sess_not_exist_99999")
+        self.assertEqual(status, 404)
+
+        SessionManager.delete_session(sess_id)
+
+    def test_mcp_jsonrpc_endpoint(self):
+        # 测试通过 POST /api/mcp 外部接入标准 MCP JSON-RPC 2.0 协议
+        payload = {
+            "jsonrpc": "2.0",
+            "method": "tools/list",
+            "id": "external-rpc-1"
+        }
+        status, data = simulate_http_request("POST", "/api/mcp", payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(data.get("jsonrpc"), "2.0")
+        self.assertIn("result", data)
+        tools = data["result"].get("tools", [])
+        tool_names = [t["name"] for t in tools]
+        self.assertIn("weather_query", tool_names)
+        self.assertIn("traffic_transit", tool_names)
+        self.assertIn("attraction_info", tool_names)
+
+
 if __name__ == "__main__":
     unittest.main()

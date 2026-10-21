@@ -94,5 +94,52 @@ class TestTravelAgentCore(unittest.TestCase):
         self.assertIn("广州塔", result.answer)
 
 
+    def test_memory_load_from_turns(self):
+        memory = ConversationMemory(session_id="test_load_turns")
+        turns = [
+            {"user_prompt": "你好，想去北京玩", "assistant_response": "北京欢迎你，推荐故宫和颐和园。"},
+            {"user_prompt": "第二天怎么去长城？", "assistant_response": "可从北京北站乘坐S2线直达八达岭。"}
+        ]
+        memory.load_from_turns(turns)
+        msgs = memory.get_messages()
+        # 系统提示词(1) + 2轮*(user+assistant) = 5
+        self.assertEqual(len(msgs), 5)
+        self.assertEqual(msgs[0]["role"], "system")
+        self.assertEqual(msgs[1]["role"], "user")
+        self.assertEqual(msgs[1]["content"], "你好，想去北京玩")
+        self.assertEqual(msgs[2]["role"], "assistant")
+        self.assertEqual(msgs[3]["role"], "user")
+        self.assertEqual(msgs[4]["role"], "assistant")
+
+    def test_memory_compact_last_turn(self):
+        memory = ConversationMemory(session_id="test_compact")
+        memory.add_user_message("广州天气如何？")
+        memory.add_assistant_message("正在查询...", tool_calls=[{"id": "call_1", "type": "function"}])
+        memory.add_tool_message("call_1", "weather_query", "晴朗 28℃")
+        memory.compact_last_turn("广州天气如何？", "今日广州天气晴朗，气温28℃，适合户外出行。")
+
+        msgs = memory.get_messages()
+        # 验证中间的 tool / tool_calls 被彻底压缩，只保留最终的 assistant 答案
+        self.assertEqual(len(msgs), 3) # system + user + assistant
+        self.assertEqual(msgs[1]["role"], "user")
+        self.assertEqual(msgs[2]["role"], "assistant")
+        self.assertEqual(msgs[2]["content"], "今日广州天气晴朗，气温28℃，适合户外出行。")
+        self.assertNotIn("tool_calls", msgs[2])
+
+    def test_memory_first_message_after_system_is_user(self):
+        memory = ConversationMemory(session_id="test_leading_user", window_size=3)
+        # 添加多条消息
+        memory.add_user_message("1")
+        memory.add_assistant_message("2")
+        memory.add_user_message("3")
+        memory.add_assistant_message("4")
+        memory.add_user_message("5")
+
+        msgs = memory.get_messages()
+        # 首条必须为 system，紧随其后的首条上下文消息必须是 user
+        self.assertEqual(msgs[0]["role"], "system")
+        self.assertEqual(msgs[1]["role"], "user")
+
+
 if __name__ == "__main__":
     unittest.main()

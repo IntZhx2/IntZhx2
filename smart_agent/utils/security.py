@@ -58,3 +58,18 @@ def decrypt_token(cipher_text: str) -> str:
         return data.decode("utf-8")
     except Exception:
         return ""
+
+
+class SafeKeyVault:
+    """高熵动态混淆敏感凭据保险箱 (SafeKeyVault)"""
+
+    @classmethod
+    def encrypt_key(cls, plain_text: str) -> str:
+        """加密明文凭据"""
+        return encrypt_token(plain_text)
+
+    @classmethod
+    def decrypt_key(cls, cipher_text: str) -> str:
+        """解密密文凭据"""
+        return decrypt_token(cipher_text)
+

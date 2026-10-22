@@ -37,14 +37,15 @@
   - 任务耗时：[PSP 2.1 记录表](pair_project/docs/PSP.md)
   - 效能报告：[性能分析与优化](pair_project/docs/performance.md)
 
-- [三人团队项目 - 能说会做的一条龙旅游规划智能体（SmartTravelAgent）](smart_agent/README.md)
+- [三人团队项目 - 能说会做的一站式旅游规划智能体（TravelAgent）](smart_agent/README.md)
   - 成员：赵海翔（3124004113）、何卓文（3124004132）、吴与同（3124004018）
-  - 协议标准：Model Context Protocol (MCP) 标准 JSON-RPC 2.0 实现
-  - 核心功能：基于时间约束逆推、交通换乘与周边美食挖掘的一条龙旅游攻略规划，支持真实大模型 API 强制接入
-  - 核心模块：`core.py` (ReAct 循环)、`memory.py` (滑动窗口记忆)、`mcp/` (Server/Client)、`tools/` (天气/交通路网/景点老字号美食/行程归档)
-  - 交互界面：白底与莫兰迪色系现代响应式 Web UI + Web Speech API 语音录入 (STT) 与 朗读 (TTS)
-  - 测试套件：19 项全通过自动化测试 `tests/`
+  - 协议标准：Model Context Protocol (MCP) 标准 JSON-RPC 2.0 规范实现
+  - 核心功能：基于硬性时间约束逆推、百度地图原生换乘/气象穿衣/美食推荐的一条龙深度定制攻略，支持真实云端大模型 API 强制接入
+  - 核心模块：`core.py` (ReAct 循环)、`session_manager.py` (多轮持久化)、`memory.py` (跨模型自愈压缩)、`security/` & `utils/security.py` (高熵混淆安全保险箱 SafeKeyVault)、`mcp/` (Server/Client)、`tools/` (百度地图 DirectionLite/天气穿衣指数/景点老字号/Markdown 导出)
+  - 交互界面：纯白底为主与莫兰迪色系现代极简 Web UI + Web Speech API 语音录入 (STT) 与 朗读 (TTS) + 侧边栏历史会话无感接续
+  - 测试套件：38 项全覆盖自动化测试 `tests/`（1.8秒内 100% 绿灯通过）
   - 团队博客：[完整作业随笔博文](smart_agent/BLOG.md)
-  - 架构白皮书：[MCP 架构设计与规范](smart_agent/docs/architecture.md)
-  - 任务耗时：[三人 PSP 2.1 记录表](smart_agent/docs/PSP.md)
+  - 架构白皮书：[MCP 架构设计与技术白皮书](smart_agent/docs/architecture.md)
+  - 任务耗时：[三人团队 PSP 2.1 任务耗时与工程效能度量表](smart_agent/docs/PSP.md)
+  - 效能报告：[系统效能度量与基准压测白皮书](smart_agent/docs/performance.md)
 

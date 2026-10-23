@@ -7,7 +7,7 @@ class SpeechEngine {
   constructor() {
     this.recognition = null;
     this.isListening = false;
-    this.autoTTS = false;
+    this.isSpeaking = false;
     this.synth = window.speechSynthesis || null;
     if (this.synth) {
       try {
@@ -103,22 +103,88 @@ class SpeechEngine {
   }
 
   /**
-   * 文本转语音朗读已停用 (保持界面清爽静音)
+   * 净化待朗读文本：去除 Markdown 格式符号、代码块与 Emoji，保证听感纯净流畅
    */
-  speak(text) {
+  cleanTextForSpeech(text) {
+    if (!text) return "";
+    let clean = text;
+    // 移除代码块
+    clean = clean.replace(/```[\s\S]*?```/g, " ");
+    // 移除行内代码
+    clean = clean.replace(/`[^`]+`/g, " ");
+    // 移除链接 [text](url) -> text
+    clean = clean.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+    // 移除 Markdown 标题标记与水平线
+    clean = clean.replace(/^#{1,6}\s+/gm, "");
+    clean = clean.replace(/^[-*_]{3,}\s*$/gm, "");
+    // 移除粗体/斜体
+    clean = clean.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
+    // 移除引用符号
+    clean = clean.replace(/^>\s+/gm, "");
+    // 移除表格管道符，换为停顿逗号
+    clean = clean.replace(/\|/g, "，");
+    // 移除无序列表符
+    clean = clean.replace(/^[-*+•]\s+/gm, "");
+    // 移除大部分 Emoji 图标
+    clean = clean.replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, "");
+    // 合并多余空白换行
+    clean = clean.replace(/\s+/g, " ").trim();
+    return clean;
+  }
+
+  /**
+   * 自然语音朗读文本 (Text-to-Speech)
+   */
+  speak(text, onStart, onEnd) {
+    if (!this.synth) {
+      alert("当前浏览器环境不支持语音合成 (Web SpeechSynthesis API)。");
+      return;
+    }
+    this.stopSpeaking();
+
+    const clean = this.cleanTextForSpeech(text);
+    if (!clean) return;
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.lang = "zh-CN";
+      utterance.rate = 1.05;
+      utterance.pitch = 1.0;
+
+      utterance.onstart = () => {
+        this.isSpeaking = true;
+        if (onStart) onStart();
+      };
+
+      utterance.onend = () => {
+        this.isSpeaking = false;
+        if (onEnd) onEnd();
+      };
+
+      utterance.onerror = (e) => {
+        console.warn("TTS 朗读异常:", e);
+        this.isSpeaking = false;
+        if (onEnd) onEnd();
+      };
+
+      this.synth.speak(utterance);
+    } catch (err) {
+      console.error("启动语音朗读失败:", err);
+      this.isSpeaking = false;
+      if (onEnd) onEnd();
+    }
+  }
+
+  /**
+   * 停止当前语音朗读
+   */
+  stopSpeaking() {
     if (this.synth) {
       try {
         this.synth.cancel();
       } catch (e) {}
     }
-  }
-
-  toggleTTS() {
-    this.autoTTS = !this.autoTTS;
-    if (!this.autoTTS && this.synth) {
-      this.synth.cancel();
-    }
-    return this.autoTTS;
+    this.isSpeaking = false;
   }
 }
 

@@ -85,7 +85,6 @@ document.addEventListener("DOMContentLoaded", () => {
   if (btnSidebarNewChatTop) btnSidebarNewChatTop.addEventListener("click", () => startNewSession());
   if (btnRefreshSessions) btnRefreshSessions.addEventListener("click", () => loadSessions());
   if (btnDownloadActiveChat) btnDownloadActiveChat.addEventListener("click", () => downloadSession(currentSessionId));
-  if (btnClearChat) btnClearChat.addEventListener("click", () => startNewSession());
 
   // 2. 弹窗交互绑定
   btnOpenConfig.addEventListener("click", () => {
@@ -210,19 +209,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 9. 清空会话
   btnClearChat.addEventListener("click", async () => {
-    if (!confirm("确定要清空当前的出行规划与对话记忆吗？")) return;
+    if (!confirm("确定要重置当前对话并清空上下文记忆吗？")) return;
     try {
       await fetch("/api/clear", { method: "POST" });
-      chatStream.innerHTML = `
-        <div class="chat-message assistant">
-          <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
-          <div class="msg-bubble">
-            <div class="msg-text">
-              <p>🧹 上下文记忆已重置。您可以开启全新的旅游目的地规划！</p>
-            </div>
-          </div>
-        </div>
-      `;
+      startNewSession();
     } catch (e) {
       alert("清空失败: " + e.message);
     }
@@ -309,17 +299,56 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function appendUserMessage(text) {
+  function appendUserMessage(text, customTime = null) {
     const row = document.createElement("div");
     row.className = "chat-message user";
     row.innerHTML = `
       <div class="msg-avatar"><i class="fa-solid fa-user"></i></div>
       <div class="msg-bubble">
         <div class="msg-text">${escapeHtml(text)}</div>
-        <div class="msg-timestamp">${getCurrentTime()}</div>
+        <div class="msg-timestamp">${escapeHtml(customTime || getCurrentTime())}</div>
       </div>
     `;
     chatStream.appendChild(row);
+  }
+
+  function createTTSButton(getText) {
+    const btn = document.createElement("button");
+    btn.className = "btn-msg-tts";
+    btn.type = "button";
+    btn.title = "语音朗读此行程方案 (Web Speech API)";
+    btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>朗读</span>';
+
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (btn.classList.contains("speaking")) {
+        window.speechEngine.stopSpeaking();
+        btn.classList.remove("speaking");
+        btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>朗读</span>';
+        return;
+      }
+
+      // 停止其它正在朗读的按钮状态
+      document.querySelectorAll(".btn-msg-tts.speaking").forEach((b) => {
+        b.classList.remove("speaking");
+        b.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>朗读</span>';
+      });
+
+      const text = typeof getText === "function" ? getText() : getText;
+      window.speechEngine.speak(
+        text,
+        () => {
+          btn.classList.add("speaking");
+          btn.innerHTML = '<i class="fa-solid fa-stop"></i> <span>停止</span>';
+        },
+        () => {
+          btn.classList.remove("speaking");
+          btn.innerHTML = '<i class="fa-solid fa-volume-high"></i> <span>朗读</span>';
+        }
+      );
+    });
+
+    return btn;
   }
 
   function appendAssistantMessage(text) {
@@ -430,6 +459,25 @@ document.addEventListener("DOMContentLoaded", () => {
         answerBox.style.display = "block";
         answerBox.innerHTML = formatMarkdown(answer);
         statusBar.style.display = "none";
+
+        let footer = row.querySelector(".msg-footer-bar");
+        if (!footer) {
+          footer = document.createElement("div");
+          footer.className = "msg-footer-bar";
+          const oldTs = row.querySelector(".msg-timestamp");
+          if (oldTs) {
+            oldTs.replaceWith(footer);
+            footer.appendChild(oldTs);
+          } else {
+            const ts = document.createElement("span");
+            ts.className = "msg-timestamp";
+            ts.textContent = getCurrentTime();
+            footer.appendChild(ts);
+            row.querySelector(".msg-bubble").appendChild(footer);
+          }
+          const ttsBtn = createTTSButton(() => answer);
+          footer.appendChild(ttsBtn);
+        }
         scrollToBottom();
       },
       showError(err) {
@@ -587,10 +635,13 @@ document.addEventListener("DOMContentLoaded", () => {
         appendArchivedAssistantTurn(turn);
       }
 
-      // 高亮当前会话卡片
+      // 高亮当前会话卡片并同步更新浏览器标签标题
       sessionsContainer.querySelectorAll(".session-item").forEach((c) => {
         c.classList.toggle("active", c.dataset.id === sessionId);
       });
+      if (data.title) {
+        document.title = `${data.title} · TravelAgent`;
+      }
 
       scrollToBottom();
       chatTextarea.focus();
@@ -600,45 +651,123 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   /**
-   * 渲染已归档的历史助手消息（含工具卡片与排版）
+   * 渲染已归档的历史助手消息中的工具调用步骤
+   */
+  function renderArchivedTraces(traces) {
+    if (!traces || traces.length === 0) return null;
+    const traceBox = document.createElement("div");
+    traceBox.className = "live-trace-box";
+    traceBox.style.marginBottom = "8px";
+
+    const calls = {};
+
+    traces.forEach((st) => {
+      const type = st.type || st.step_type;
+      if (type === "answer") return; // 最终攻略已作为回复正文渲染，忽略
+
+      if (type === "thought" && st.content) {
+        const step = document.createElement("div");
+        step.className = "live-trace-step thought";
+        step.innerHTML = `
+          <div class="live-step-header">
+            <span><i class="fa-solid fa-brain"></i> <strong>思考规划</strong></span>
+          </div>
+          <div class="live-step-body">${formatMarkdown(st.content)}</div>
+        `;
+        traceBox.appendChild(step);
+      } else if (type === "tool_call") {
+        const tool = (st.details && st.details.tool) || st.action || "mcp_tool";
+        const args = (st.details && st.details.arguments) || {};
+        const callId = (st.details && st.details.call_id) || "call_" + Math.random().toString(36).slice(2, 7);
+        const argsStr = typeof args === "object" ? JSON.stringify(args, null, 2) : args;
+
+        const step = document.createElement("div");
+        step.className = "live-trace-step";
+        step.id = `archived-call-${callId}`;
+        step.innerHTML = `
+          <div class="live-step-header">
+            <span><i class="fa-solid fa-wrench"></i> <strong>已调用工具:</strong> ${escapeHtml(tool)}</span>
+            <span class="tool-tag">${escapeHtml(tool)}</span>
+          </div>
+          <div class="live-step-body">
+            <div><small style="color: var(--text-muted)">传入参数:</small> <code class="md-inline-code">${escapeHtml(argsStr)}</code></div>
+            <div class="tool-result-area" style="display: none; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border-subtle);"></div>
+          </div>
+        `;
+        traceBox.appendChild(step);
+        calls[callId] = step;
+      } else if (type === "tool_result") {
+        const tool = (st.details && st.details.tool) || "";
+        const isError = (st.details && st.details.is_error) || st.is_error || false;
+        const callId = (st.details && st.details.call_id) || "";
+        let step = callId ? calls[callId] : null;
+
+        if (!step) {
+          step = document.createElement("div");
+          step.className = "live-trace-step";
+          step.innerHTML = `
+            <div class="live-step-header">
+              <span><i class="fa-solid ${isError ? 'fa-circle-exclamation' : 'fa-circle-check'}"></i> <strong>工具数据反馈:</strong> ${escapeHtml(tool || 'MCP')}</span>
+              <span class="tool-tag">${isError ? '异常' : '成功'}</span>
+            </div>
+            <div class="live-step-body">
+              <div class="tool-result-area"></div>
+            </div>
+          `;
+          traceBox.appendChild(step);
+        }
+
+        step.classList.add(isError ? "error" : "success");
+        const resArea = step.querySelector(".tool-result-area");
+        if (resArea) {
+          resArea.style.display = "block";
+          resArea.innerHTML = `<small style="color: var(--text-muted)">反馈结果:</small><div>${formatMarkdown(st.content || st.observation || "")}</div>`;
+        }
+      }
+    });
+
+    return traceBox;
+  }
+
+  /**
+   * 渲染已归档的历史助手消息（含工具卡片、排版与语音朗读）
    */
   function appendArchivedAssistantTurn(turn) {
     const row = document.createElement("div");
     row.className = "chat-message assistant";
 
-    let toolsHtml = "";
+    const avatar = document.createElement("div");
+    avatar.className = "msg-avatar";
+    avatar.innerHTML = '<i class="fa-solid fa-compass"></i>';
+    row.appendChild(avatar);
+
+    const bubble = document.createElement("div");
+    bubble.className = "msg-bubble";
+
     if (turn.step_traces && turn.step_traces.length > 0) {
-      toolsHtml = '<div class="live-trace-box" style="margin-bottom:8px;">';
-      turn.step_traces.forEach((st) => {
-        const toolName = st.action || "mcp_tool";
-        const isErr = st.is_error || false;
-        const icon = isErr ? "fa-triangle-exclamation" : "fa-circle-check";
-        const colorClass = isErr ? "error" : "success";
-        const obsPreview = st.observation
-          ? escapeHtml(st.observation.slice(0, 160)) + (st.observation.length > 160 ? "..." : "")
-          : "";
-        toolsHtml += `
-          <div class="tool-call-card ${colorClass}" style="margin-bottom:6px; opacity:0.95;">
-            <div class="tool-call-header">
-              <i class="fa-solid ${icon}"></i>
-              <span class="tool-call-name">已调用工具: ${escapeHtml(toolName)}</span>
-              <span class="tool-status-badge ${colorClass}">${isErr ? "反馈异常" : "执行成功"}</span>
-            </div>
-            ${obsPreview ? `<div class="tool-call-result-preview">${obsPreview}</div>` : ""}
-          </div>
-        `;
-      });
-      toolsHtml += "</div>";
+      const tracesEl = renderArchivedTraces(turn.step_traces);
+      if (tracesEl && tracesEl.children.length > 0) {
+        bubble.appendChild(tracesEl);
+      }
     }
 
-    row.innerHTML = `
-      <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
-      <div class="msg-bubble">
-        ${toolsHtml}
-        <div class="msg-text final-answer">${formatMarkdown(turn.assistant_response)}</div>
-        <div class="msg-timestamp">${turn.timestamp ? turn.timestamp.slice(11, 19) : getCurrentTime()}</div>
-      </div>
-    `;
+    const textDiv = document.createElement("div");
+    textDiv.className = "msg-text final-answer";
+    textDiv.innerHTML = formatMarkdown(turn.assistant_response);
+    bubble.appendChild(textDiv);
+
+    const footer = document.createElement("div");
+    footer.className = "msg-footer-bar";
+    const ts = document.createElement("span");
+    ts.className = "msg-timestamp";
+    ts.textContent = turn.timestamp ? turn.timestamp.slice(11, 19) : getCurrentTime();
+    footer.appendChild(ts);
+
+    const ttsBtn = createTTSButton(() => turn.assistant_response);
+    footer.appendChild(ttsBtn);
+
+    bubble.appendChild(footer);
+    row.appendChild(bubble);
     chatStream.appendChild(row);
   }
 
@@ -646,6 +775,7 @@ document.addEventListener("DOMContentLoaded", () => {
    * 新建全新会话
    */
   async function startNewSession(requestBackend = true) {
+    window.speechEngine.stopSpeaking();
     try {
       if (requestBackend) {
         const resp = await fetch("/api/session/new", {
@@ -660,51 +790,39 @@ document.addEventListener("DOMContentLoaded", () => {
       currentSessionId = null;
     }
 
-    // 重置聊天舞台为欢迎指引
+    document.title = "TravelAgent · 智行一条龙旅游规划智能体 (MCP 驱动)";
+
+    // 重置聊天舞台为莫兰迪风格欢迎指引
     chatStream.innerHTML = `
-      <div class="welcome-guide">
-        <div class="guide-badge">
-          <i class="fa-solid fa-compass"></i> 旅行规划助手
-        </div>
-        <h2>您好，我是您的 TravelAgent 旅行管家</h2>
-        <p class="guide-subtitle">
-          请在下方输入您的<b>目的地、出行天数、特定时间安排</b>（如：<i>“周六下午15:00安排去广州塔”</i>），
-          我将结合气象、交通路线与景点信息为您规划合理的旅行行程。
-        </p>
-        <div class="quick-prompts">
-          <div class="prompt-chip" data-text="帮我规划广州2日游，全程坐地铁，周六下午15:00去广州塔登塔，预算适中，想吃老字号粤菜早茶">
-            <span class="chip-icon">🗼</span>
-            <div class="chip-content">
-              <strong>广州2日地铁游</strong>
-              <small>周六15:00广州塔 · 地道西关早茶</small>
+      <div class="chat-message assistant">
+        <div class="msg-avatar"><i class="fa-solid fa-compass"></i></div>
+        <div class="msg-bubble">
+          <div class="welcome-banner">
+            <h3>您好！我是您的旅游规划助手 <strong>TravelAgent</strong></h3>
+            <p>为您整合<strong>“景点 + 交通 + 美食”</strong>，结合实时气象与交通数据生成定制旅行方案：</p>
+            <div class="welcome-features">
+              <div class="feat-box">
+                <i class="fa-solid fa-location-crosshairs"></i>
+                <h4>时间节点规划</h4>
+                <p>支持指定特定时间到达某地，合理规划交通与游览用时</p>
+              </div>
+              <div class="feat-box">
+                <i class="fa-solid fa-route"></i>
+                <h4>交通路线换乘</h4>
+                <p>按您的出行偏好规划地铁线路、打车耗时与换乘指引</p>
+              </div>
+              <div class="feat-box">
+                <i class="fa-solid fa-bowl-food"></i>
+                <h4>特色美食精选</h4>
+                <p>就近匹配特色餐厅与招牌菜品，提供地道餐饮建议</p>
+              </div>
             </div>
+            <p class="welcome-note">💡 请在左侧选择出行要素或在下方直接键入您的旅行想法！</p>
           </div>
-          <div class="prompt-chip" data-text="从广州大学城出发去深圳湾公园看海，下午3点前到达，晚上返回广州，优先公交地铁，推荐沿途美食">
-            <span class="chip-icon">🌊</span>
-            <div class="chip-content">
-              <strong>广州大学城 ➔ 深圳湾公园</strong>
-              <small>跨城通勤接驳 · 15:00前必达 · 沿途地道风味</small>
-            </div>
-          </div>
-          <div class="prompt-chip" data-text="带父母游览北京3天2晚，行程平缓不走回头路，必去故宫颐和园，优先打车网约车，推荐烤鸭老字号">
-            <span class="chip-icon">🏯</span>
-            <div class="chip-content">
-              <strong>北京3天孝亲悠闲游</strong>
-              <small>故宫颐和园无障碍预约 · 老字号四季民福烤鸭</small>
-            </div>
-          </div>
+          <div class="msg-timestamp">新对话已就绪</div>
         </div>
       </div>
     `;
-
-    // 重新挂载灵感卡片点击事件
-    chatStream.querySelectorAll(".prompt-chip").forEach((chip) => {
-      chip.addEventListener("click", () => {
-        chatTextarea.value = chip.dataset.text;
-        chatTextarea.focus();
-        triggerSend();
-      });
-    });
 
     loadSessions();
     chatTextarea.focus();

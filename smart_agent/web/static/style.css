@@ -10,6 +10,7 @@
   --bg-sidebar: #f5f4ef;
   --bg-card: #ffffff;
   --bg-input: #ffffff;
+  --bg-hover: #e8e6df;
 
   /* 莫兰迪经典色谱 (低饱和度、柔和雅致) */
   --morandi-blue: #5d758c;       /* 灰暮蓝：核心主色、主按钮 */
@@ -656,6 +657,45 @@ body {
   color: var(--text-muted);
 }
 
+.msg-footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.btn-msg-tts {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-msg-tts:hover {
+  background-color: var(--morandi-blue-light);
+  color: var(--morandi-blue);
+  border-color: var(--morandi-blue);
+}
+
+.btn-msg-tts.speaking {
+  background-color: var(--morandi-rose-light);
+  color: var(--morandi-rose);
+  border-color: var(--morandi-rose);
+  animation: pulse-tts 1.2s infinite;
+}
+
+@keyframes pulse-tts {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
 /* 欢迎横幅 */
 .welcome-banner {
   background-color: var(--bg-subtle);
@@ -1259,4 +1299,29 @@ body {
 
 .btn-confirm-save:hover {
   filter: brightness(1.08);
+}
+
+/* 响应式断点与移动端视口适配 */
+@media (max-width: 900px) {
+  .app-layout {
+    flex-direction: column;
+  }
+  .workspace {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .sidebar {
+    width: 100% !important;
+    max-height: 380px;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .chat-viewport {
+    height: auto;
+    flex: 1;
+  }
+  .modal-card {
+    width: 94% !important;
+    margin: 20px auto;
+  }
 }

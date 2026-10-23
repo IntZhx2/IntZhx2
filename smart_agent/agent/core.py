@@ -6,6 +6,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 import json
+import time
 import logging
 from smart_agent.config import MAX_REACT_TURNS
 from smart_agent.agent.memory import ConversationMemory
@@ -86,6 +87,7 @@ class SmartAgent:
                     pass
 
         # 1. 记录用户输入至记忆
+        start_time = time.time()
         self.memory.add_user_message(user_input)
 
         final_answer = ""
@@ -189,6 +191,9 @@ class SmartAgent:
         # 5. 清理本轮 ReAct 过程中的工具中间报文，压缩为纯净的 user -> assistant 对
         # 彻底解决不同大模型（如 DeepSeek 与 Gemini）之间 tool_calls 协议与格式冲突
         self.memory.compact_last_turn(user_input, final_answer)
+
+        elapsed_sec = time.time() - start_time
+        logger.info(f"ReAct 规划循环完成，耗时 {elapsed_sec:.2f}s，产生 {len(traces)} 个轨迹步骤")
 
         return AgentRunResult(
             answer=final_answer,

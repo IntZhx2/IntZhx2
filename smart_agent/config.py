@@ -63,3 +63,16 @@ SYSTEM_PROMPT = """你是一个专业且贴心的一站式旅游规划智能体�
    - 规划完成后，可主动询问用户是否需要调用 `itinerary_save` 保存为本地攻略文档。
 4. 【文风与排版】：条理清晰，使用精美的 Markdown 表格、时间线列表与 Emoji 标识，行文温润亲切，充满对旅途的人文关怀。
 """
+
+
+def get_model_display_name(model_id: str) -> str:
+    """将大模型技术标识转换为用户友好的显示名称"""
+    mapping = {
+        "gemini-3.8-flash-high": "Google Gemini 3.8 Flash (High)",
+        "gemini-2.5-flash": "Google Gemini 2.5 Flash",
+        "deepseek-chat": "DeepSeek V3 (Official)",
+        "deepseek-reasoner": "DeepSeek R1 (Official)",
+        "qwen-plus": "通义千问 Qwen-Plus",
+        "gpt-4o": "OpenAI GPT-4o",
+    }
+    return mapping.get(model_id, model_id)

@@ -107,6 +107,27 @@ class TestTravelToolsSuite(unittest.TestCase):
         self.assertFalse(list_res.is_error)
         self.assertIn(filename, list_res.get_text())
 
+        if target.exists():
+            target.unlink()
+
+    def test_tools_boundary_inputs(self):
+        weather_tool = WeatherQueryTool()
+        traffic_tool = TrafficTransitTool()
+
+        # 城市为空
+        r_w = weather_tool.execute(city="")
+        self.assertTrue(r_w.is_error)
+        self.assertIn("城市名称不能为空", r_w.get_text())
+
+        # 起点或终点为空
+        r_t1 = traffic_tool.execute(city="广州", origin="", destination="广州塔")
+        self.assertTrue(r_t1.is_error)
+        self.assertIn("不能为空", r_t1.get_text())
+
+        r_t2 = traffic_tool.execute(city="广州", origin="沙面", destination="")
+        self.assertTrue(r_t2.is_error)
+        self.assertIn("不能为空", r_t2.get_text())
+
 
 if __name__ == "__main__":
     unittest.main()

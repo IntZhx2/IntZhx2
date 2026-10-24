@@ -1,5 +1,5 @@
 """
-SafeKeyVault 凭据安全保险箱与运行时解密引擎
+旧版 SafeKeyVault 导入兼容层；可逆混淆不提供安全保密能力。
 适配 smart_agent/security/key_vault.py 模块路径，代理调用底层动态混淆加密引擎。
 """
 

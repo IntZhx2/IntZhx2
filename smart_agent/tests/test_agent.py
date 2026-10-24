@@ -3,6 +3,7 @@
 """
 
 import unittest
+from unittest.mock import patch
 from smart_agent.agent.memory import ConversationMemory
 from smart_agent.agent.llm_client import LLMClient
 from smart_agent.agent.core import SmartAgent
@@ -48,6 +49,13 @@ class MockOnlineLLMClient(LLMClient):
 
 class TestTravelAgentCore(unittest.TestCase):
     def setUp(self):
+        self.network = patch('smart_agent.tools.baidu_map.BaiduMapClient._request',
+                             return_value=(False, {}, '测试不访问外网'))
+        self.network.start()
+        self.addCleanup(self.network.stop)
+        self.weather = patch('smart_agent.tools.weather_tool.WeatherQueryTool._fetch_online', return_value='')
+        self.weather.start()
+        self.addCleanup(self.weather.stop)
         self.server = MCPServer(name="TestTravelServer")
         for tool in create_default_tools():
             self.server.register_tool(tool)
@@ -71,12 +79,29 @@ class TestTravelAgentCore(unittest.TestCase):
 
         for i in range(6):
             memory.add_user_message(f"user_msg_{i}")
+            memory.add_assistant_message(f"assistant_msg_{i}")
 
-        # 系统词(1) + 最近4条 = 5
+        # 系统词(1) + 最近两轮完整的 user -> assistant 历史(4)
         msgs = memory.get_messages()
         self.assertEqual(len(msgs), 5)
         self.assertEqual(msgs[0]["role"], "system")
-        self.assertEqual(msgs[-1]["content"], "user_msg_5")
+        self.assertEqual(msgs[1:], [
+            {"role": "user", "content": "user_msg_4"},
+            {"role": "assistant", "content": "assistant_msg_4"},
+            {"role": "user", "content": "user_msg_5"},
+            {"role": "assistant", "content": "assistant_msg_5"},
+        ])
+
+        # 活跃轮次暂时超出预算；等最终回答到达后才整轮裁剪旧历史。
+        memory.add_user_message("user_msg_6")
+        self.assertEqual(memory.get_messages(), msgs + [{"role": "user", "content": "user_msg_6"}])
+        memory.add_assistant_message("assistant_msg_6")
+        self.assertEqual(memory.get_messages()[1:], [
+            {"role": "user", "content": "user_msg_5"},
+            {"role": "assistant", "content": "assistant_msg_5"},
+            {"role": "user", "content": "user_msg_6"},
+            {"role": "assistant", "content": "assistant_msg_6"},
+        ])
 
     def test_react_travel_tool_loop(self):
         mock_llm = MockOnlineLLMClient()

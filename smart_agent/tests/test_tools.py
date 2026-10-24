@@ -3,27 +3,36 @@
 """
 
 import unittest
+import tempfile
 from unittest import mock
 from pathlib import Path
 from smart_agent.tools.weather_tool import WeatherQueryTool
 from smart_agent.tools.traffic_tool import TrafficTransitTool
 from smart_agent.tools.attraction_tool import AttractionInfoTool
 from smart_agent.tools.itinerary_tool import ItinerarySaveTool, ItineraryListTool
-from smart_agent.config import WORKSPACE_DIR
 
 
 class TestTravelToolsSuite(unittest.TestCase):
     def setUp(self):
-        # 清空测试保存文件
-        for f in WORKSPACE_DIR.glob("test_travel_*.md"):
-            try:
-                f.unlink()
-            except Exception:
-                pass
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.workspace = Path(temporary.name)
+        for patcher in (
+            mock.patch("smart_agent.tools.itinerary_tool.WORKSPACE_DIR", self.workspace),
+            mock.patch("smart_agent.tools.baidu_map.get_baidu_ak", return_value=""),
+            mock.patch("urllib.request.urlopen", side_effect=AssertionError("外部请求必须使用 mock")),
+            mock.patch("smart_agent.tools.baidu_map.BaiduMapClient._request",
+                       side_effect=AssertionError("地图请求必须使用 mock")),
+        ):
+            patched = patcher.start()
+            self.addCleanup(patcher.stop)
+            # 即使被工具的错误处理捕获，也必须让未隔离的外部调用导致测试失败。
+            if patcher.attribute in ("urlopen", "_request"):
+                self.addCleanup(patched.assert_not_called)
 
     def test_weather_query_tool(self):
         tool = WeatherQueryTool()
-        # 1. 在线获取真实数据场景
+        # 1. 模拟国际天气服务结果，不访问真实服务
         with unittest.mock.patch.object(tool, "_fetch_online", return_value="🌤️ 【广州 气象实时监测】: 实时气温 28℃, 状态: Sunny, 湿度: 50%"):
             res = tool.execute(city="广州")
             self.assertFalse(res.is_error)
@@ -44,7 +53,12 @@ class TestTravelToolsSuite(unittest.TestCase):
     def test_traffic_transit_tool(self):
         tool = TrafficTransitTool()
         # 测试带起终点与地铁方式
-        res = tool.execute(city="广州", origin="广州南站", destination="广州塔", transit_mode="metro_bus")
+        details = {"duration": "约 40 分钟", "cost": "6 元", "route": "测试地铁换乘路线", "tip": "预留候车时间"}
+        with mock.patch.object(tool.baidu_client, "ak", "test-ak"), mock.patch.object(
+            tool.baidu_client, "route_plan", return_value=(True, details, "")
+        ) as route:
+            res = tool.execute(city="广州", origin="广州南站", destination="广州塔", transit_mode="metro_bus")
+            route.assert_called_once_with("广州", "广州南站", "广州塔", "metro_bus")
         self.assertFalse(res.is_error)
         text = res.get_text()
         self.assertIn("广州南站", text)
@@ -52,10 +66,10 @@ class TestTravelToolsSuite(unittest.TestCase):
         self.assertIn("地铁", text)
         self.assertIn("预估耗时", text)
 
-        # 未收录路线真实反馈 is_error=True
-        unrecorded = tool.execute(city="广州", origin="火星基地", destination="未知地点")
+        # 没有配置服务时返回错误，不返回硬编码路线。
+        unrecorded = tool.execute(city="广州", origin="火星基地", destination="未知地点", transit_mode="metro_bus")
         self.assertTrue(unrecorded.is_error)
-        self.assertIn("未收录", unrecorded.get_text())
+        self.assertIn("未配置", unrecorded.get_text())
 
         # 缺少参数异常
         err_res = tool.execute(city="广州", origin="")
@@ -95,7 +109,7 @@ class TestTravelToolsSuite(unittest.TestCase):
         self.assertIn("成功保存并导出", save_res.get_text())
 
         # 验证文件已存在
-        target = WORKSPACE_DIR / filename
+        target = self.workspace / filename
         self.assertTrue(target.exists())
         with open(target, "r", encoding="utf-8") as f:
             data = f.read()
@@ -106,9 +120,6 @@ class TestTravelToolsSuite(unittest.TestCase):
         list_res = list_tool.execute()
         self.assertFalse(list_res.is_error)
         self.assertIn(filename, list_res.get_text())
-
-        if target.exists():
-            target.unlink()
 
     def test_tools_boundary_inputs(self):
         weather_tool = WeatherQueryTool()

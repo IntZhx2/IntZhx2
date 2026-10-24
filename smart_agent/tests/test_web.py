@@ -1,184 +1,212 @@
-"""
-旅游规划 Web 服务与 REST API 单元测试 (基于内存 Mock 隔离)
-"""
-
-import unittest
+"""In-memory HTTP acceptance tests: no external model or real user directories."""
 import json
+import tempfile
+import unittest
 from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
 from smart_agent.web.server import SmartAgentHTTPRequestHandler, AgentServiceHolder
-from smart_agent.config import WORKSPACE_DIR
+from smart_agent.agent.session_manager import SessionManager
 
 
 class MockHTTPConnection:
-    def __init__(self, request_bytes: bytes):
-        self.rfile = BytesIO(request_bytes)
-        self.wfile = BytesIO()
+    def __init__(self, data):
+        self.rfile, self.wfile = BytesIO(data), BytesIO()
 
     def makefile(self, mode, *args, **kwargs):
-        if "b" in mode:
-            if "r" in mode:
-                return self.rfile
-            return self.wfile
-        raise ValueError("Only binary mode supported")
+        return self.rfile if 'r' in mode else self.wfile
 
     def sendall(self, data):
         self.wfile.write(data)
 
 
-def simulate_http_request(method: str, path: str, body: dict = None) -> tuple:
-    body_bytes = json.dumps(body).encode("utf-8") if body else b""
-    headers = [
-        f"{method} {path} HTTP/1.1",
-        "Host: localhost",
-        f"Content-Length: {len(body_bytes)}",
-        "Content-Type: application/json",
-        "",
-        "",
-    ]
-    raw_req = "\r\n".join(headers).encode("utf-8") + body_bytes
-    mock_conn = MockHTTPConnection(raw_req)
+def request(method, path, body=None, authenticated=True, headers=None, raw=None):
+    data = raw if raw is not None else json.dumps(body).encode() if body is not None else b''
+    supplied = {'Host': 'localhost', 'Content-Length': str(len(data)), 'Content-Type': 'application/json'}
+    if authenticated:
+        supplied['Cookie'] = 'travel_access=' + AgentServiceHolder.access_token
+    supplied.update(headers or {})
+    head = method + ' ' + path + ' HTTP/1.1\r\n' + ''.join(k + ': ' + v + '\r\n' for k, v in supplied.items()) + '\r\n'
+    conn = MockHTTPConnection(head.encode() + data)
+    SmartAgentHTTPRequestHandler(conn, ('127.0.0.1', 12345), None)
+    head, _, response = conn.wfile.getvalue().partition(b'\r\n\r\n')
+    status = int(head.split(b' ')[1])
+    return status, head.decode(), response
 
-    handler = SmartAgentHTTPRequestHandler(mock_conn, ("127.0.0.1", 8000), None)
 
-    resp_raw = mock_conn.wfile.getvalue().decode("utf-8", errors="ignore")
-    lines = resp_raw.split("\r\n")
-    status_code = int(lines[0].split(" ")[1])
-
-    empty_idx = -1
-    for i, line in enumerate(lines):
-        if line == "":
-            empty_idx = i
-            break
-
-    body_str = "\r\n".join(lines[empty_idx + 1:]) if empty_idx != -1 else ""
-    parsed_json = json.loads(body_str) if body_str else {}
-    return status_code, parsed_json
+def simulate_http_request(method, path, body=None):
+    status, _, data = request(method, path, body)
+    return status, json.loads(data) if data else {}
 
 
 class TestTravelWebServer(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        from smart_agent.web.server import CONFIG_FILE
-        cls._orig_config_bytes = CONFIG_FILE.read_bytes() if CONFIG_FILE.exists() else None
+    def setUp(self):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.root = Path(temp.name)
+        for target, value in [
+            ('smart_agent.web.server.CONFIG_FILE', self.root / 'config.json'),
+            ('smart_agent.agent.session_manager.SESSIONS_DIR', self.root),
+            ('smart_agent.web.server.WORKSPACE_DIR', self.root),
+        ]:
+            p = patch(target, value)
+            p.start()
+            self.addCleanup(p.stop)
         AgentServiceHolder.initialize()
+        AgentServiceHolder.llm_client.api_key = ''
 
-    @classmethod
-    def tearDownClass(cls):
-        from smart_agent.web.server import CONFIG_FILE
-        if cls._orig_config_bytes is not None:
-            CONFIG_FILE.write_bytes(cls._orig_config_bytes)
-        elif CONFIG_FILE.exists():
-            CONFIG_FILE.unlink()
-        AgentServiceHolder.initialize()
+    def configure(self):
+        return simulate_http_request('POST', '/api/config', {
+            'api_key': 'dummy-not-a-real-key', 'api_base': 'https://example.invalid/v1', 'model': 'test-model'})
 
-    def test_status_endpoint(self):
-        status, data = simulate_http_request("GET", "/api/status")
+    def test_status_requires_authentication(self):
+        self.assertEqual(request('GET', '/api/status', authenticated=False)[0], 401)
+        status, data = simulate_http_request('GET', '/api/status')
         self.assertEqual(status, 200)
-        self.assertIn("status", data)
-        self.assertEqual(len(data["team"]), 3)
+        self.assertEqual(len(data['team']), 3)
 
-    def test_travel_tools_endpoint(self):
-        status, data = simulate_http_request("GET", "/api/tools")
+    def test_browser_bootstrap_is_http_only_and_strict(self):
+        status, headers, _ = request('GET', '/', authenticated=False)
         self.assertEqual(status, 200)
-        tools = data["tools"]
-        names = [t["name"] for t in tools]
-        self.assertIn("weather_query", names)
-        self.assertIn("traffic_transit", names)
-        self.assertIn("attraction_info", names)
-        self.assertIn("itinerary_save", names)
+        self.assertIn('HttpOnly; SameSite=Strict', headers)
+        self.assertIn('Content-Security-Policy:', headers)
 
-    def test_config_api(self):
-        # 1. 验证 GET /api/config
-        status, cfg = simulate_http_request("GET", "/api/config")
+    def test_foreign_origin_and_host_are_rejected(self):
+        for headers in [{'Origin': 'https://other.invalid'}, {'Host': 'other.invalid'},
+                        {'Sec-Fetch-Site': 'cross-site'}]:
+            self.assertEqual(request('POST', '/api/config', {}, headers=headers)[0], 403)
+        self.assertEqual(request('OPTIONS', '/api/config', headers={'Origin': 'https://other.invalid'})[0], 403)
+
+    def test_config_saved_is_not_connected(self):
+        status, data = self.configure()
         self.assertEqual(status, 200)
-        self.assertIn("has_key", cfg)
+        self.assertFalse(data['verified'])
+        self.assertIn('尚未验证', data['message'])
+        self.assertEqual((self.root / 'config.json').stat().st_mode & 0o777, 0o600)
 
-        # 2. 验证 POST /api/config 配置 Key
-        status, post_res = simulate_http_request("POST", "/api/config", {
-            "api_key": "sk-test-valid-user-key-654321",
-            "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-            "model": "qwen-plus"
-        })
-        self.assertEqual(status, 200)
-        self.assertTrue(post_res["has_key"])
-
-    def test_chat_without_api_key(self):
-        # 将 Key 置空
-        AgentServiceHolder.llm_client.api_key = ""
-        status, data = simulate_http_request("POST", "/api/chat", {
-            "message": "帮我规划广州2日游，周六下午3点必须到广州塔"
-        })
+    def test_endpoint_change_requires_new_key_and_does_not_mutate(self):
+        self.configure()
+        old = AgentServiceHolder.llm_client
+        status, _ = simulate_http_request('POST', '/api/config', {'api_base': 'https://new.invalid/v1'})
         self.assertEqual(status, 400)
-        self.assertIn("未配置大模型 API Key", data["error"])
+        self.assertIs(AgentServiceHolder.llm_client, old)
 
-    def test_itineraries_list_api(self):
-        # 保存一份测试文档
-        test_file = WORKSPACE_DIR / "test_api_travel.md"
-        with open(test_file, "w", encoding="utf-8") as f:
-            f.write("# 广州2日游一条龙方案\n测试内容")
-
-        status, data = simulate_http_request("GET", "/api/itineraries")
+    def test_invalid_initial_endpoint_can_be_corrected(self):
+        AgentServiceHolder.llm_client.api_base = 'http://remote.invalid/v1'
+        status, result = self.configure()
         self.assertEqual(status, 200)
-        filenames = [item["filename"] for item in data["itineraries"]]
-        self.assertIn("test_api_travel.md", filenames)
+        self.assertEqual(result['api_base'], 'https://example.invalid/v1')
 
-        if test_file.exists():
-            test_file.unlink()
-
-
-    def test_sessions_list_endpoint(self):
-        status, data = simulate_http_request("GET", "/api/sessions")
+    def test_explicit_connection_test(self):
+        self.configure()
+        with patch('smart_agent.agent.llm_client.LLMClient.chat_completion', return_value={'content': 'OK'}):
+            status, result = simulate_http_request('POST', '/api/config/test', {})
         self.assertEqual(status, 200)
-        self.assertIn("sessions", data)
-        self.assertIn("active_session_id", data)
+        self.assertTrue(result['verified'])
 
-    def test_session_get_and_continuation_endpoint(self):
-        # 创建一个测试会话
-        from smart_agent.agent.session_manager import SessionManager
-        sess = SessionManager.create_new_session("Web端测试广州游")
-        sess_id = sess["session_id"]
-        SessionManager.append_turn(
-            session_id=sess_id,
-            user_prompt="周六下午3点去广州塔",
-            assistant_response="建议14:30到达广州塔",
-            step_traces=[],
-            llm_messages=[],
-        )
+    def test_invalid_json_and_types_are_errors(self):
+        for body in [[], {'message': 123}, {'message': 'hello', 'stream': 'yes'}]:
+            self.assertEqual(request('POST', '/api/chat', body)[0], 400)
+        self.assertEqual(request('POST', '/api/chat', raw=b'{')[0], 400)
+        self.assertEqual(request('POST', '/api/chat', {}, headers={'Content-Length': '-1'})[0], 400)
+        self.assertEqual(request('POST', '/api/chat', {}, headers={'Content-Length': '1048577'})[0], 400)
 
-        # 1. 正常获取并激活
-        status, data = simulate_http_request("GET", f"/api/session?id={sess_id}")
-        self.assertEqual(status, 200)
-        self.assertEqual(data["session_id"], sess_id)
-        self.assertEqual(len(data["turns"]), 1)
-        self.assertEqual(AgentServiceHolder.current_session_id, sess_id)
-
-        # 2. 缺少参数
-        status, err_data = simulate_http_request("GET", "/api/session")
+    def test_chat_without_key(self):
+        status, data = simulate_http_request('POST', '/api/chat', {'message': '广州旅游'})
         self.assertEqual(status, 400)
+        self.assertIn('未配置', data['error'])
 
-        # 3. 不存在的会话
-        status, not_found_data = simulate_http_request("GET", "/api/session?id=sess_not_exist_99999")
+    def test_unknown_session_is_rejected(self):
+        self.configure()
+        status, _ = simulate_http_request('POST', '/api/chat', {
+            'message': 'hello', 'session_id': 'missing', 'stream': False})
         self.assertEqual(status, 404)
+        self.assertEqual(AgentServiceHolder.contexts, {})
 
-        SessionManager.delete_session(sess_id)
+    def test_sessions_are_isolated_and_get_is_read_only(self):
+        self.configure()
+        a, b = [SessionManager.create_new_session()['session_id'] for _ in range(2)]
+        def echo(messages, tools=None):
+            return {'content': '|'.join(m['content'] for m in messages if m['role'] == 'user')}
+        with patch('smart_agent.agent.llm_client.LLMClient.chat_completion', side_effect=echo):
+            for sid, message in [(a, 'PRIVATE_A'), (b, 'PRIVATE_B')]:
+                status, result = simulate_http_request('POST', '/api/chat', {
+                    'session_id': sid, 'message': message, 'stream': False})
+                self.assertEqual(status, 200)
+                self.assertEqual(result['answer'], message)
+            original = AgentServiceHolder.context(a).memory.get_messages()
+            self.assertEqual(simulate_http_request('GET', '/api/session?id=' + b)[0], 200)
+            self.assertEqual(AgentServiceHolder.context(a).memory.get_messages(), original)
 
-    def test_mcp_jsonrpc_endpoint(self):
-        # 测试通过 POST /api/mcp 外部接入标准 MCP JSON-RPC 2.0 协议
-        payload = {
-            "jsonrpc": "2.0",
-            "method": "tools/list",
-            "id": "external-rpc-1"
-        }
-        status, data = simulate_http_request("POST", "/api/mcp", payload)
+    def test_same_session_busy_returns_conflict(self):
+        self.configure()
+        sid = SessionManager.create_new_session()['session_id']
+        context = AgentServiceHolder.context(sid)
+        context.lock.acquire()
+        try:
+            self.assertEqual(simulate_http_request('POST', '/api/chat', {
+                'session_id': sid, 'message': 'hello', 'stream': False})[0], 409)
+            self.assertEqual(simulate_http_request('POST', '/api/session/delete', {'id': sid})[0], 409)
+        finally:
+            context.lock.release()
+
+    def test_delete_between_lookup_and_lock_does_not_recreate_session(self):
+        self.configure()
+        sid = SessionManager.create_new_session()['session_id']
+        context = AgentServiceHolder.context(sid)
+        def stale_lookup(requested):
+            self.assertEqual(requested, sid)
+            SessionManager.delete_session(sid)
+            return context
+        with patch.object(AgentServiceHolder, 'context', side_effect=stale_lookup), patch(
+                'smart_agent.agent.llm_client.LLMClient.chat_completion') as model:
+            status, _ = simulate_http_request('POST', '/api/chat', {
+                'session_id': sid, 'message': 'stale request', 'stream': False})
+        self.assertEqual(status, 404)
+        self.assertIsNone(SessionManager.get_session(sid))
+        model.assert_not_called()
+
+    def test_persistence_failure_rolls_back_invisible_turn(self):
+        self.configure()
+        sid = SessionManager.create_new_session()['session_id']
+        def echo(messages, tools=None):
+            return {'content': '|'.join(m['content'] for m in messages if m['role'] == 'user')}
+        with patch('smart_agent.agent.llm_client.LLMClient.chat_completion', side_effect=echo):
+            with patch.object(SessionManager, 'append_turn', side_effect=OSError('injected disk failure')):
+                self.assertEqual(simulate_http_request('POST', '/api/chat', {
+                    'session_id': sid, 'message': 'UNSAVED', 'stream': False})[0], 400)
+            status, result = simulate_http_request('POST', '/api/chat', {
+                'session_id': sid, 'message': 'NEXT', 'stream': False})
         self.assertEqual(status, 200)
-        self.assertEqual(data.get("jsonrpc"), "2.0")
-        self.assertIn("result", data)
-        tools = data["result"].get("tools", [])
-        tool_names = [t["name"] for t in tools]
-        self.assertIn("weather_query", tool_names)
-        self.assertIn("traffic_transit", tool_names)
-        self.assertIn("attraction_info", tool_names)
+        self.assertEqual(result['answer'], 'NEXT')
+        self.assertEqual([turn['user_prompt'] for turn in SessionManager.get_session(sid)['turns']], ['NEXT'])
+
+    def test_clear_is_scoped_and_persisted(self):
+        a, b = [SessionManager.create_new_session()['session_id'] for _ in range(2)]
+        for sid in [a, b]:
+            SessionManager.append_turn(sid, 'hi', 'reply', [], [])
+        self.assertEqual(simulate_http_request('POST', '/api/clear', {'session_id': a})[0], 200)
+        self.assertEqual(SessionManager.get_session(a)['turns'], [])
+        self.assertEqual(len(SessionManager.get_session(b)['turns']), 1)
+
+    def test_mcp_notification_and_parameters(self):
+        self.assertEqual(simulate_http_request('POST', '/api/mcp', {
+            'jsonrpc': '2.0', 'method': 'notifications/initialized'})[0], 202)
+        status, data = simulate_http_request('POST', '/api/mcp', {
+            'jsonrpc': '2.0', 'method': 'tools/list', 'id': 1})
+        self.assertEqual(status, 200)
+        self.assertEqual(len(data['result']['tools']), 5)
+
+    def test_download_scope_and_symlink(self):
+        (self.root / 'safe.md').write_text('# safe')
+        status, headers, body = request('GET', '/api/itinerary/download?filename=safe.md')
+        self.assertEqual(status, 200)
+        self.assertIn('attachment', headers)
+        self.assertEqual(body, b'# safe')
+        self.assertEqual(request('GET', '/api/itinerary/download?filename=../README.md')[0], 400)
+        (self.root / 'link.md').symlink_to(self.root / 'safe.md')
+        self.assertEqual(request('GET', '/api/itinerary/download?filename=link.md')[0], 404)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     unittest.main()

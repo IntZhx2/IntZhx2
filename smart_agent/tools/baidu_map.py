@@ -1,37 +1,44 @@
 """
 百度地图 WebService API 客户端 (Baidu Maps API Client)
 提供经纬度地理编码 (Geocoding)、全国跨城/同城路线规划 (DirectionLite) 及 POI 深度检索 (Place API)。
-结合密钥安全解密机制，确保 API Key 不被泄露与盗用。
+凭据从环境或本地配置自动读取；兼容的旧版 XOR 混淆格式不提供安全存储。
 """
 
 import os
 import re
 import json
 import time
+import threading
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
-from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK
+from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK, MAPS_CONFIG_FILE
 from smart_agent.utils.security import decrypt_token
 
 # 进程内地理编码与 POI 高速缓存（避免重复请求消耗 QPS 与配额）
 _GEOCODE_CACHE: Dict[str, Tuple[float, float]] = {}
 _POI_CACHE: Dict[str, Dict[str, Any]] = {}
-_LAST_REQUEST_TIME: float = 0.0
+_LAST_REQUEST_TIME: Optional[float] = None
+_REQUEST_LOCK = threading.Lock()
 
 
 def _rate_limit_pace(min_interval: float = 0.35):
-    """请求平滑限流节流器，确保每秒请求数严格保持在免费 3 QPS 安全阈值以内"""
+    """串行分配进程内请求时隙，以单调时钟保持最小间隔。"""
     global _LAST_REQUEST_TIME
-    now = time.time()
-    elapsed = now - _LAST_REQUEST_TIME
-    if elapsed < min_interval:
-        time.sleep(min_interval - elapsed)
-    _LAST_REQUEST_TIME = time.time()
+    with _REQUEST_LOCK:
+        now = time.monotonic()
+        if _LAST_REQUEST_TIME is not None:
+            deadline = _LAST_REQUEST_TIME + min_interval
+            remaining = deadline - now
+            while remaining > 0:
+                time.sleep(remaining)
+                now = time.monotonic()
+                remaining = deadline - now
+        _LAST_REQUEST_TIME = now
 
 
 def get_baidu_ak() -> str:
-    """获取当前可用的百度地图 AK (优先环境变量，次选解密内置密钥)"""
+    """环境优先，再自动读取本地 AK；不请求网络，也不在错误中输出凭据。"""
     env_ak = os.environ.get("BAIDU_MAPS_AK", "").strip() or BAIDU_MAPS_AK_ENV.strip()
     if env_ak:
         return env_ak
@@ -39,6 +46,20 @@ def get_baidu_ak() -> str:
         decrypted = decrypt_token(ENCRYPTED_BAIDU_AK)
         if decrypted:
             return decrypted
+    try:
+        # 有界读取，损坏/缺失配置保持未配置状态，避免影响其他工具启动。
+        with MAPS_CONFIG_FILE.open("r", encoding="utf-8") as stream:
+            raw = stream.read(16385)
+        if len(raw) > 16384:
+            return ""
+        data = json.loads(raw)
+        value = data.get("baidu_maps_ak") if isinstance(data, dict) else None
+        if isinstance(value, str):
+            value = value.strip()
+            if value and len(value) <= 1024 and not any(char.isspace() for char in value):
+                return value
+    except (OSError, ValueError, RecursionError):
+        pass
     return ""
 
 
@@ -98,6 +119,8 @@ class BaiduMapClient:
         """
         地址编码：将地址名称转换为经纬度坐标 (lat, lng)
         """
+        if not self.is_configured:
+            return None, "未配置百度地图 AK"
         cache_key = f"{city}:{address}".strip()
         if cache_key in _GEOCODE_CACHE:
             return _GEOCODE_CACHE[cache_key], ""
@@ -123,12 +146,18 @@ class BaiduMapClient:
         city: str,
         origin: str,
         destination: str,
-        transit_mode: str = "metro_bus",
+        transit_mode: str = "",
     ) -> Tuple[bool, Optional[Dict[str, str]], str]:
         """
         全国/同城路线规划 (DirectionLite API)
         transit_mode: metro_bus (公交地铁), taxi/self_drive (驾车/打车), walk (步行)
         """
+        for field, value in (("city", city), ("origin", origin), ("destination", destination)):
+            if not isinstance(value, str) or not value.strip():
+                return False, None, f"错误: {field} 必须为非空字符串"
+        if not isinstance(transit_mode, str) or transit_mode not in ("metro_bus", "taxi", "self_drive", "walk"):
+            return False, None, "错误: transit_mode 未配置或无效，须指定 metro_bus、taxi、self_drive 或 walk"
+        city, origin, destination = city.strip(), origin.strip(), destination.strip()
         if not self.is_configured:
             return False, None, "未配置百度地图 AK"
 
@@ -225,7 +254,7 @@ class BaiduMapClient:
                 "tip": "早晚高峰主干道通行车流较大，建议提前留意实时导航避堵路线。",
             }, ""
 
-        else:  # walk
+        elif transit_mode == "walk":
             ok, data, err = self._request(
                 "/directionlite/v1/walking",
                 {"origin": orig_str, "destination": dest_str},

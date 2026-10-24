@@ -3,6 +3,8 @@
 """
 
 import unittest
+import tempfile
+from unittest.mock import patch
 from pathlib import Path
 from smart_agent.agent.session_manager import SessionManager
 from smart_agent.config import SESSIONS_DIR
@@ -10,6 +12,11 @@ from smart_agent.config import SESSIONS_DIR
 
 class TestSessionManager(unittest.TestCase):
     def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.directory_patch = patch('smart_agent.agent.session_manager.SESSIONS_DIR', Path(self.temporary.name))
+        self.directory_patch.start()
+        self.addCleanup(self.temporary.cleanup)
+        self.addCleanup(self.directory_patch.stop)
         self.created_sessions = []
         # 清理测试会话文件
         for f in SESSIONS_DIR.glob("sess_test_*.json"):

@@ -4,6 +4,7 @@
 """
 
 from dataclasses import dataclass, field, asdict
+from copy import deepcopy
 from typing import Any, Dict, List, Optional
 import json
 import time
@@ -45,7 +46,21 @@ class ConversationMemory:
         self.system_prompt = system_prompt
         self.window_size = window_size
         self._messages: List[Message] = []
+        self._turn_snapshot: Optional[List[Message]] = None
         self._init_system_prompt()
+
+    def begin_turn(self, user_input: str):
+        """Pin the active turn, retaining an exact snapshot for failed-run rollback."""
+        if self._turn_snapshot is not None:
+            raise RuntimeError("A conversation turn is already active")
+        self._turn_snapshot = deepcopy(self._messages)
+        self.add_user_message(user_input)
+
+    def rollback_turn(self):
+        """Undo memory changes only; tools may already have had external effects."""
+        if self._turn_snapshot is not None:
+            self._messages = self._turn_snapshot
+            self._turn_snapshot = None
 
     def _init_system_prompt(self):
         if not self._messages:
@@ -54,7 +69,6 @@ class ConversationMemory:
     def add_user_message(self, content: str) -> Message:
         msg = Message(role="user", content=content)
         self._messages.append(msg)
-        self._trim_window()
         return msg
 
     def add_assistant_message(
@@ -68,7 +82,6 @@ class ConversationMemory:
     def add_tool_message(self, tool_call_id: str, name: str, content: str) -> Message:
         msg = Message(role="tool", content=content, tool_call_id=tool_call_id, name=name)
         self._messages.append(msg)
-        self._trim_window()
         return msg
 
     def get_messages(self) -> List[Dict[str, Any]]:
@@ -91,46 +104,39 @@ class ConversationMemory:
         return display_history
 
     def _trim_window(self):
-        """保持滑动窗口预算，保留系统提示词，修剪最旧历史，并保证第一条非系统消息必为 user"""
-        if len(self._messages) <= self.window_size + 1:
+        """Trim whole historical turns only after an answer; the newest turn may exceed budget."""
+        if self._turn_snapshot is not None or not self._messages:
             return
-
-        sys_msg = self._messages[0]
-        recent = self._messages[-self.window_size:]
-
-        # 确保截断后的首条消息必为 user，彻底杜绝孤立的 assistant 或 tool 消息引发模型 400 校验异常
-        while recent and recent[0].role != "user":
-            recent.pop(0)
-
-        self._messages = [sys_msg] + recent
+        last = self._messages[-1]
+        if last.role != "assistant" or last.tool_calls:
+            return
+        starts = [i for i, msg in enumerate(self._messages) if msg.role == "user"]
+        # Each boundary includes every assistant tool call and all its results.
+        while len(starts) > 1 and len(self._messages) - 1 > self.window_size:
+            next_start = starts[1]
+            self._messages = self._messages[:1] + self._messages[next_start:]
+            starts = [i for i, msg in enumerate(self._messages) if msg.role == "user"]
 
     def compact_last_turn(self, user_input: str, assistant_response: str):
-        """将一轮 ReAct 执行后的消息流压缩为纯净的 user -> assistant 对，剔除中间易引起跨模型冲突的工具碎片"""
-        clean_msgs = []
-        for m in self._messages:
-            if m.role == "system":
-                clean_msgs.append(m)
-            elif m.role in ("user", "assistant") and not m.tool_calls and not m.tool_call_id:
-                clean_msgs.append(m)
-
-        has_last_user = any(m.role == "user" and m.content == user_input for m in clean_msgs[-2:])
-        if not has_last_user:
-            clean_msgs.append(Message(role="user", content=user_input))
-
-        has_last_asst = any(m.role == "assistant" and m.content == assistant_response for m in clean_msgs[-1:])
-        if not has_last_asst:
-            clean_msgs.append(Message(role="assistant", content=assistant_response))
-
-        self._messages = clean_msgs
+        """Compact only the completed active turn, then evict whole older turns."""
+        last_user = next((i for i in range(len(self._messages) - 1, 0, -1)
+                          if self._messages[i].role == "user"), None)
+        if last_user is None:
+            self._messages.append(Message(role="user", content=user_input))
+        else:
+            self._messages = self._messages[:last_user + 1]
+        self._messages.append(Message(role="assistant", content=assistant_response))
+        self._turn_snapshot = None
         self._trim_window()
 
     def clear(self):
         """清空当前会话历史"""
         self._messages = []
+        self._turn_snapshot = None
         self._init_system_prompt()
 
     def load_from_turns(self, turns: List[Dict[str, Any]]):
-        """从历史交互轮次重构高纯度、100% 跨模型兼容的对话上下文"""
+        """从历史轮次恢复 user/assistant 文本上下文，不包含工具调用报文。"""
         self.clear()
         if not turns:
             return

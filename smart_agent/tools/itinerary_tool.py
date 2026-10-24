@@ -5,7 +5,8 @@
 
 import time
 import re
-from pathlib import Path
+import os
+from pathlib import PureWindowsPath
 from typing import Any, Dict
 from smart_agent.config import WORKSPACE_DIR
 from smart_agent.tools.base import BaseTool
@@ -39,16 +40,19 @@ class ItinerarySaveTool(BaseTool):
                 },
                 "filename": {
                     "type": "string",
-                    "description": "保存的文件名，如 'guangzhou_travel.md'（可选，留空将自动根据标题生成）",
+                    "description": "纯文件名，如 'guangzhou_travel.md'（可选，留空按标题生成；拒绝路径、符号链接及覆盖已有文件）",
                 },
             },
             "required": ["title", "content"],
         }
 
     def execute(self, **kwargs) -> ToolCallResult:
-        title = kwargs.get("title", "定制旅游出行攻略").strip()
-        content = kwargs.get("content", "").strip()
-        filename = kwargs.get("filename", "").strip()
+        title = kwargs.get("title", "定制旅游出行攻略")
+        content = kwargs.get("content", "")
+        filename = kwargs.get("filename", "")
+        if not all(isinstance(value, str) for value in (title, content, filename)):
+            return ToolCallResult.text("错误: title、content 与 filename 必须为字符串", is_error=True)
+        title, content = title.strip(), content.strip()
 
         if not content:
             return ToolCallResult.text("错误: 攻略正文内容 content 不能为空", is_error=True)
@@ -59,6 +63,12 @@ class ItinerarySaveTool(BaseTool):
             timestamp = time.strftime("%Y%m%d_%H%M")
             filename = f"{clean_title}_{timestamp}.md"
 
+        # 同时拒绝 POSIX 和 Windows 路径，不能通过后缀补全修正非法路径。
+        if (filename in (".", "..") or not filename.strip()
+                or any(char in filename for char in ("/", "\\", ":", "\x00"))
+                or PureWindowsPath(filename).drive):
+            return ToolCallResult.text("错误: filename 必须是纯文件名，不允许绝对路径或目录穿越", is_error=True)
+
         if not filename.endswith((".md", ".txt")):
             filename += ".md"
 
@@ -66,7 +76,16 @@ class ItinerarySaveTool(BaseTool):
 
         try:
             WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
-            with open(target_path, "w", encoding="utf-8") as f:
+            # 固定目录描述符防止目录在检查后被替换；独占创建拒绝已有文件及符号链接。
+            directory_fd = os.open(WORKSPACE_DIR, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            try:
+                file_fd = os.open(
+                    filename, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    0o600, dir_fd=directory_fd,
+                )
+            finally:
+                os.close(directory_fd)
+            with os.fdopen(file_fd, "w", encoding="utf-8") as f:
                 f.write(f"# {title}\n\n")
                 f.write(f"> 生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')} | 生成工具: SmartAgent 旅游规划专家\n\n")
                 f.write("---\n\n")
@@ -80,6 +99,8 @@ class ItinerarySaveTool(BaseTool):
                 f"- 📊 内容体量: 约 {len(content)} 字符\n"
                 f"您可随时通过网页端或工作空间直接查看完整行程。"
             )
+        except FileExistsError:
+            return ToolCallResult.text("错误: 文件已存在（含符号链接），请使用其他文件名；不会覆盖", is_error=True)
         except Exception as e:
             return ToolCallResult.text(f"保存攻略文件失败: {str(e)}", is_error=True)
 
@@ -102,7 +123,8 @@ class ItineraryListTool(BaseTool):
 
     def execute(self, **kwargs) -> ToolCallResult:
         try:
-            files = list(WORKSPACE_DIR.glob("*.md")) + list(WORKSPACE_DIR.glob("*.txt"))
+            files = [f for pattern in ("*.md", "*.txt") for f in WORKSPACE_DIR.glob(pattern)
+                     if not f.is_symlink() and f.is_file()]
             if not files:
                 return ToolCallResult.text("📂 当前工作区暂未归档任何旅游攻略文档。")
 

@@ -1,14 +1,12 @@
 """
-敏感密钥混淆与安全解密引擎 (Security & Key Vault Engine)
-提供抗静态代码扫描 (Anti-Scanning)、抗凭据爬取的动态混淆与安全解密机制。
-用于在不暴露明文 API Key 的前提下安全内置第三方服务凭据（如百度地图 AK）。
+旧版凭据 XOR 混淆格式兼容工具。
+固定种子和算法均公开，任何人均可还原内容；这不是安全加密或密钥存储。
+混淆结果仍是敏感凭据，不应提交到仓库。部署时应使用环境变量或专用秘密管理服务。
 """
 
 import base64
 import hashlib
-from typing import Optional
-
-# 混淆种子与衍生向量（避免明文模式特征被扫描器抓取）
+# 保留固定种子以兼容已有数据；它不是秘密密钥。
 _SALT_SEED = b"GDUT-CS-TravelAgent-Sec2026-SafeKeyVault-SaltSeed"
 
 
@@ -25,8 +23,8 @@ def _derive_keystream(length: int) -> bytes:
 
 def encrypt_token(plain_text: str) -> str:
     """
-    将明文 API Key 转化为高熵不可逆模式的密文字符串。
-    可安全提交至 Git 仓库，无惧 Secret Scanner 告警。
+    将文本编码为可逆的旧版 XOR 混淆格式，不提供保密性。
+    MD5 截断值仅用于检测意外损坏，不提供防篡改保证。
     """
     if not plain_text or not plain_text.strip():
         return ""
@@ -40,8 +38,7 @@ def encrypt_token(plain_text: str) -> str:
 
 def decrypt_token(cipher_text: str) -> str:
     """
-    在程序运行时将密文字符串在内存中即时解密为明文。
-    如密文损坏或校验失败，安全返回空字符串，绝不抛出异常。
+    还原旧版 XOR 混淆文本；格式损坏或校验失败时返回空字符串。
     """
     if not cipher_text or not cipher_text.strip():
         return ""
@@ -61,15 +58,14 @@ def decrypt_token(cipher_text: str) -> str:
 
 
 class SafeKeyVault:
-    """高熵动态混淆敏感凭据保险箱 (SafeKeyVault)"""
+    """旧版兼容名称；仅包装可逆混淆，不是安全保险箱。"""
 
     @classmethod
     def encrypt_key(cls, plain_text: str) -> str:
-        """加密明文凭据"""
+        """以旧版格式混淆凭据，不提供安全加密。"""
         return encrypt_token(plain_text)
 
     @classmethod
     def decrypt_key(cls, cipher_text: str) -> str:
-        """解密密文凭据"""
+        """还原旧版混淆凭据。"""
         return decrypt_token(cipher_text)
-

@@ -1,6 +1,8 @@
 """
-Model Context Protocol (MCP) 服务端实现
-管理工具注册表，对外提供标准 JSON-RPC 2.0 请求响应分发。
+Model Context Protocol (MCP) 服务端实现。
+In-process partial MCP 2024-11-05 subset: initialize/initialized, tools and ping
+over JSON-RPC dictionaries. No transport, batch requests, resources or prompts;
+this adapter does not require the official SDK or claim full MCP compliance.
 """
 
 from typing import Any, Dict, List, Optional
@@ -14,10 +16,12 @@ from smart_agent.mcp.protocol import (
     METHOD_NOT_FOUND,
     INVALID_PARAMS,
     INTERNAL_ERROR,
+    INVALID_REQUEST,
 )
 from smart_agent.tools.base import BaseTool
 
 logger = logging.getLogger("mcp.server")
+_MISSING_ARGUMENTS = object()
 
 
 class MCPServer:
@@ -40,26 +44,57 @@ class MCPServer:
         """获取所有可用工具清单"""
         return [tool.get_definition() for tool in self._tools.values()]
 
-    def call_tool(self, name: str, arguments: Optional[Dict[str, Any]] = None) -> ToolCallResult:
-        """执行指定工具"""
+    def call_tool(self, name: str, arguments: Any = _MISSING_ARGUMENTS) -> ToolCallResult:
+        """Validate and contain failures for every caller and every BaseTool subclass."""
+        if not isinstance(name, str) or not name:
+            return ToolCallResult.text("错误: 工具 name 必须为非空字符串", is_error=True)
         tool = self._tools.get(name)
         if not tool:
             return ToolCallResult.text(f"错误: 未找到名为 '{name}' 的工具", is_error=True)
 
-        args = arguments or {}
-        return tool.execute(**args)
+        args = {} if arguments is _MISSING_ARGUMENTS else arguments
+        try:
+            tool.validate_arguments(args)
+        except (TypeError, ValueError) as exc:
+            return ToolCallResult.text(f"工具参数无效: {exc}", is_error=True)
+        except Exception as exc:
+            logger.warning("Tool schema validation failed (%s)", type(exc).__name__)
+            return ToolCallResult.text(f"工具校验异常: {type(exc).__name__}: {exc}", is_error=True)
+        try:
+            result = tool.execute(**args)
+            if not isinstance(result, ToolCallResult):
+                raise TypeError("tool must return ToolCallResult")
+            return result
+        except Exception as exc:
+            logger.warning("Tool execution failed (%s)", type(exc).__name__)
+            return ToolCallResult.text(f"工具执行异常: {type(exc).__name__}: {exc}", is_error=True)
 
-    def handle_request(self, request_payload: Dict[str, Any]) -> Dict[str, Any]:
-        """处理符合 JSON-RPC 2.0 规范的请求字典"""
+    def handle_request(self, request_payload: Any) -> Optional[Dict[str, Any]]:
+        """Handle one request; valid notifications always return None, even on errors."""
+        if not isinstance(request_payload, dict):
+            return JSONRPCResponse.fail(None, INVALID_REQUEST, "请求必须是 JSON-RPC 对象").to_dict()
         req_id = request_payload.get("id")
+        if req_id is not None and type(req_id) not in (str, int, float):
+            return JSONRPCResponse.fail(None, INVALID_REQUEST, "无效的请求 id").to_dict()
         try:
             req = JSONRPCRequest.from_dict(request_payload)
         except Exception as e:
-            return JSONRPCResponse.fail(req_id, -32600, f"无效的 JSON-RPC 请求: {str(e)}").to_dict()
+            return JSONRPCResponse.fail(req_id, INVALID_REQUEST, f"无效的 JSON-RPC 请求: {str(e)}").to_dict()
 
-        # 分发方法路由
+        notification = "id" not in request_payload
+        params = request_payload.get("params", {})
+        try:
+            if not isinstance(params, dict):
+                response = JSONRPCResponse.fail(req.id, INVALID_PARAMS, "params 必须是对象").to_dict()
+            else:
+                response = self._dispatch(req, params)
+        except Exception as exc:
+            logger.warning("MCP request failed (%s)", type(exc).__name__)
+            response = JSONRPCResponse.fail(req.id, INTERNAL_ERROR, "内部服务错误").to_dict()
+        return None if notification else response
+
+    def _dispatch(self, req: JSONRPCRequest, params: Dict[str, Any]) -> Dict[str, Any]:
         method = req.method
-        params = req.params or {}
 
         if method == "tools/list":
             tools_data = [t.to_dict() for t in self.list_tools()]
@@ -67,7 +102,7 @@ class MCPServer:
 
         elif method == "tools/call":
             name = params.get("name")
-            arguments = params.get("arguments", {})
+            arguments = params.get("arguments", _MISSING_ARGUMENTS)
             if not name or not isinstance(name, str):
                 return JSONRPCResponse.fail(req.id, INVALID_PARAMS, "缺少或无效的 'name' 参数").to_dict()
 
@@ -85,6 +120,9 @@ class MCPServer:
                     "version": self.version,
                 },
             }).to_dict()
+
+        elif method == "notifications/initialized":
+            return JSONRPCResponse.success(req.id, {}).to_dict()
 
         elif method == "ping":
             return JSONRPCResponse.success(req.id, {"status": "pong", "server": self.name}).to_dict()

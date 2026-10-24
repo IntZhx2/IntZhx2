@@ -12,6 +12,7 @@ SmartAgent 智能体主程序入口
 import sys
 import argparse
 import unittest
+import getpass
 from pathlib import Path
 
 # 确保 smart_agent 可以作为顶层包或直接执行
@@ -52,7 +53,7 @@ def run_cli_mode():
     print(f"🛠️ 已成功就绪 {len(mcp_client.get_tools())} 个 MCP 旅游专属工具！")
     if not llm_client.has_valid_key():
         print("⚠️  当前未配置大模型 API Key（系统已关闭伪离线模式，必须接入真实大模型）。")
-        prompt_key = input("👉 请输入您的大模型 API Key (如阿里云百炼/DeepSeek sk-xxx): ").strip()
+        prompt_key = getpass.getpass("👉 请输入您的大模型 API Key（输入不回显）: ").strip()
         if prompt_key:
             llm_client.api_key = prompt_key
             print("✅ API Key 已设定！\n")
@@ -87,6 +88,8 @@ def run_cli_mode():
             result = agent.run(user_input, on_step_callback=print_step)
             print(f"\n💬 SmartAgent 回复:\n{result.answer}")
 
+        except (RuntimeError, ValueError, OSError) as exc:
+            print(f"请求失败：{exc}。可重试，或输入 clear 清空上下文。")
         except (KeyboardInterrupt, EOFError):
             print("\n👋 交互已终止。")
             break
@@ -122,6 +125,7 @@ def main():
         action="store_true",
         help="运行系统全量自动化测试套件",
     )
+    parser.add_argument("--mcp-stdio", action="store_true", help="启动 MCP 工具子集的 stdio 服务")
     parser.add_argument(
         "--host",
         default=SERVER_HOST,
@@ -136,7 +140,10 @@ def main():
 
     args = parser.parse_args()
 
-    if args.test:
+    if args.mcp_stdio:
+        from smart_agent.mcp.stdio import run_stdio
+        run_stdio()
+    elif args.test:
         run_tests()
     elif args.cli:
         run_cli_mode()

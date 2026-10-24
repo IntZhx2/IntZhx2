@@ -2,7 +2,7 @@
 SmartAgent 核心模块基准性能与开销剖析 (Benchmark & Profiling)
 测试内容：
 1. MCP JSON-RPC 2.0 序列化与反序列化吞吐量
-2. SafeKeyVault 高熵动态混淆加密与解密往返吞吐量
+2. 旧版可逆混淆转换吞吐量（不代表密码安全）
 3. 百度地图客户端本地高速缓存 (Cache Hit) 检索吞吐量
 4. 上下文滑动窗口修剪与 compact_last_turn 压缩性能
 """
@@ -48,7 +48,7 @@ def benchmark_key_vault(iterations: int = 10000):
         assert decrypted == raw_key
     elapsed = time.perf_counter() - start
     qps = iterations / elapsed
-    print(f"✅ [SafeKeyVault 解密] {iterations} 次迭代: 耗时 {elapsed:.4f}s | 吞吐量: {qps:,.0f} ops/s")
+    print(f"✅ [旧版混淆转换] {iterations} 次迭代: 耗时 {elapsed:.4f}s | 吞吐量: {qps:,.0f} ops/s")
 
 
 def benchmark_cache_speed(iterations: int = 10000):

@@ -7,6 +7,7 @@
 """
 
 import sys
+import getpass
 from pathlib import Path
 
 # 确保项目根目录在 sys.path 中
@@ -19,16 +20,16 @@ from smart_agent.utils.security import encrypt_token, decrypt_token
 
 def main():
     print("=" * 60)
-    print("🔐 TravelAgent 百度地图 API Key 安全加密生成器")
+    print("TravelAgent 旧版可逆混淆转换器（不可用于保护公开仓库中的真实 Key）")
     print("=" * 60)
-    print("本工具将把您的百度地图 AK 转化为经过混淆与校验的密文字符串，")
-    print("防止 GitHub Secret Scanning 检测及代码泄漏风险。\n")
+    print("仅用于兼容旧格式。任何人都能从公开算法恢复内容，不提供保密能力。")
+    print("请优先使用 BAIDU_MAPS_AK 环境变量；不要把真实凭据或转换结果提交仓库。\n")
 
     if len(sys.argv) > 1:
         raw_key = sys.argv[1].strip()
     else:
         try:
-            raw_key = input("👉 请输入您的百度地图 API Key (AK): ").strip()
+            raw_key = getpass.getpass("请输入待转换内容（不回显）: ").strip()
         except (KeyboardInterrupt, EOFError):
             print("\n已取消操作。")
             return
@@ -42,13 +43,13 @@ def main():
     restored = decrypt_token(cipher)
     assert restored == raw_key, "自检失败：解密结果与原文不符"
 
-    print("\n✅ 加密成功！生成的密文字符串为:")
+    print("\n转换完成（可逆，不能公开提交）:")
     print("-" * 60)
     print(cipher)
     print("-" * 60)
     print("\n使用方法:")
-    print("1. 方式一: 将上述密文字符串配置到 smart_agent/config.py 的 ENCRYPTED_BAIDU_AK 变量中;")
-    print("2. 方式二: 也可以直接设置环境变量 BAIDU_MAPS_AK=<您的明文AK> 本地直接调用。")
+    print("旧版兼容：仅在本机设置 ENCRYPTED_BAIDU_AK 环境变量，不要修改源码默认值。")
+    print("推荐方式：本机设置 BAIDU_MAPS_AK 环境变量。")
     print("=" * 60)
 
 

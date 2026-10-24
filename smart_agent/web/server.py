@@ -284,6 +284,9 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                     self._send_json(409, {"error": "会话正在执行，请完成后重试"})
                     return
                 try:
+                    if SessionManager.get_session(sid) is None:
+                        self._send_json(404, {"error": "会话不存在"})
+                        return
                     if path == "/api/clear":
                         session = SessionManager.get_session(sid)
                         session.update(turns=[], llm_messages=[])
@@ -318,7 +321,11 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         with AgentServiceHolder.config_lock:
             old = AgentServiceHolder.llm_client
             base = validate_api_base(payload.get("api_base", old.api_base))
-            changed = base != validate_api_base(old.api_base)
+            try:
+                changed = base != validate_api_base(old.api_base)
+            except ValueError:
+                # A bad environment value must not prevent correcting the UI config.
+                changed = True
             if changed and not payload.get("api_key", "").strip():
                 raise ValueError("模型地址变更时必须重新填写对应 API Key")
             client = LLMClient(base, payload.get("api_key", old.api_key),
@@ -349,7 +356,13 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(409, {"error": "会话正在执行，请勿重复发送"})
             return
         started = False
+        previous_memory = None
+        persisted = False
         try:
+            if SessionManager.get_session(sid) is None:
+                self._send_json(404, {"error": "会话不存在，请新建会话"})
+                return
+            previous_memory = context.memory.export_messages()
             # A request keeps one immutable provider/key configuration for its lifetime.
             context.agent.llm_client = client
             if stream:
@@ -363,6 +376,7 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             result = context.agent.run(message.strip(), on_step=callback)
             session = SessionManager.append_turn(sid, message.strip(), result.answer,
                 [step.to_dict() for step in result.traces], context.memory.export_messages())
+            persisted = True
             if stream:
                 self._sse({"type": "done", "session_id": sid, "title": session["title"],
                            "result": result.to_dict()})
@@ -372,13 +386,15 @@ class SmartAgentHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(200, body)
         except (BrokenPipeError, ConnectionResetError):
             pass
-        except Exception:
-            logger.exception("会话执行失败")
+        except Exception as exc:
+            logger.warning("会话执行失败 (%s)", type(exc).__name__)
             if started:
                 self._sse({"type": "error", "session_id": sid, "error": "执行失败，请检查模型配置或稍后重试"})
             else:
                 self._send_json(400, {"error": "执行失败，请检查模型配置或稍后重试"})
         finally:
+            if not persisted and previous_memory is not None:
+                context.memory.load_from_messages(previous_memory)
             context.lock.release()
             if stream:
                 self.close_connection = True

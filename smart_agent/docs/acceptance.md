@@ -4,12 +4,13 @@
 
 ## 本地验证结果
 
-- Python 3.13.3：102 项测试通过，完整测试运行耗时 1.222 秒。
+- Python 3.13.3：108 项测试通过，最终完整测试运行耗时 1.229 秒。
 - Node.js 24.11.1：38 项前端渲染及交互测试通过。
 - JavaScript 语法检查、Python 编译检查及 git diff --check 通过。
 - 使用两个临时本机 HTTP 服务，跑通首页 Cookie、未鉴权拒绝、跨站拒绝、模型连接测试、工具调用、SSE 轨迹、同一会话追问和 Markdown 下载。
 - 使用独立 stdio 子进程，跑通 initialize、initialized 通知、tools/list、tools/call 和 JSON 解析错误。此项验证工具消息子集，不代表所有 MCP 客户端互通。
 - 模型、地图响应使用测试替身；HTTP 集成测试使用本地模拟模型，没有消耗真实模型或地图配额。
+- 最终完整测试设置外部网络拦截，非本机请求尝试次数为 0。
 
 ## 问题与修复对照
 
@@ -27,6 +28,9 @@
 | Markdown/模型名注入 | 纯渲染器转义与协议白名单、textContent、CSP | 38 项前端测试 |
 | 保存即显示已连接 | 保存和真实连接测试分离，状态可重置 | test_config_saved_is_not_connected、前端状态测试 |
 | 并发限流失效 | 单调时钟加请求锁，重新检查提前唤醒 | TestMapPacingAndConfiguration |
+| 并发删除后旧请求重建会话 | 取得执行锁后重新验证会话存在 | test_delete_between_lookup_and_lock_does_not_recreate_session |
+| 落盘失败留下不可见对话 | 保存失败恢复执行前的上下文快照 | test_persistence_failure_rolls_back_invisible_turn |
+| 错误环境地址阻止网页修正 | 旧地址无效时允许提供新地址与新 Key | test_invalid_initial_endpoint_can_be_corrected |
 
 ## 提交前需要真人完成的验收
 
@@ -41,4 +45,4 @@
 
 本机单用户；没有多租户身份系统。天气只支持当前观测，静态资料不代表最新票价或预约状态。时间规划是模型建议，没有数学求解及准点保证。JSON 本地持久化不属于数据库。语音依赖浏览器及其服务。MCP 仅实现明确列出的工具消息子集，不提供完整 Streamable HTTP。
 
-本次未验证真实服务商端到端成功，不将 102/38 项测试通过表述为 100% 覆盖率或生产可靠性。
+本次未验证真实服务商端到端成功，不将 108/38 项测试通过表述为 100% 覆盖率或生产可靠性。

@@ -91,6 +91,12 @@ class TestTravelWebServer(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIs(AgentServiceHolder.llm_client, old)
 
+    def test_invalid_initial_endpoint_can_be_corrected(self):
+        AgentServiceHolder.llm_client.api_base = 'http://remote.invalid/v1'
+        status, result = self.configure()
+        self.assertEqual(status, 200)
+        self.assertEqual(result['api_base'], 'https://example.invalid/v1')
+
     def test_explicit_connection_test(self):
         self.configure()
         with patch('smart_agent.agent.llm_client.LLMClient.chat_completion', return_value={'content': 'OK'}):
@@ -143,6 +149,37 @@ class TestTravelWebServer(unittest.TestCase):
             self.assertEqual(simulate_http_request('POST', '/api/session/delete', {'id': sid})[0], 409)
         finally:
             context.lock.release()
+
+    def test_delete_between_lookup_and_lock_does_not_recreate_session(self):
+        self.configure()
+        sid = SessionManager.create_new_session()['session_id']
+        context = AgentServiceHolder.context(sid)
+        def stale_lookup(requested):
+            self.assertEqual(requested, sid)
+            SessionManager.delete_session(sid)
+            return context
+        with patch.object(AgentServiceHolder, 'context', side_effect=stale_lookup), patch(
+                'smart_agent.agent.llm_client.LLMClient.chat_completion') as model:
+            status, _ = simulate_http_request('POST', '/api/chat', {
+                'session_id': sid, 'message': 'stale request', 'stream': False})
+        self.assertEqual(status, 404)
+        self.assertIsNone(SessionManager.get_session(sid))
+        model.assert_not_called()
+
+    def test_persistence_failure_rolls_back_invisible_turn(self):
+        self.configure()
+        sid = SessionManager.create_new_session()['session_id']
+        def echo(messages, tools=None):
+            return {'content': '|'.join(m['content'] for m in messages if m['role'] == 'user')}
+        with patch('smart_agent.agent.llm_client.LLMClient.chat_completion', side_effect=echo):
+            with patch.object(SessionManager, 'append_turn', side_effect=OSError('injected disk failure')):
+                self.assertEqual(simulate_http_request('POST', '/api/chat', {
+                    'session_id': sid, 'message': 'UNSAVED', 'stream': False})[0], 400)
+            status, result = simulate_http_request('POST', '/api/chat', {
+                'session_id': sid, 'message': 'NEXT', 'stream': False})
+        self.assertEqual(status, 200)
+        self.assertEqual(result['answer'], 'NEXT')
+        self.assertEqual([turn['user_prompt'] for turn in SessionManager.get_session(sid)['turns']], ['NEXT'])
 
     def test_clear_is_scoped_and_persisted(self):
         a, b = [SessionManager.create_new_session()['session_id'] for _ in range(2)]

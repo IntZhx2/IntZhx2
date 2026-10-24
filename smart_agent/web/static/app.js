@@ -4,6 +4,8 @@
  */
 
 document.addEventListener("DOMContentLoaded", () => {
+  // The shared renderer treats all model, tool and archived text as untrusted.
+  const { escapeHtml, render: formatMarkdown } = window.SafeMarkdown;
   // DOM 核心元素
   const chatStream = document.getElementById("chat-stream");
   const chatTextarea = document.getElementById("chat-textarea");
@@ -38,16 +40,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const inputApiKey = document.getElementById("input-api-key");
   const inputModel = document.getElementById("input-model");
   const btnSaveConfig = document.getElementById("btn-save-config");
+  const btnTestConfig = document.getElementById("btn-test-config");
+  const itinerariesContainer = document.getElementById("itineraries-container");
+  const btnRefreshItineraries = document.getElementById("btn-refresh-itineraries");
 
   let hasValidApiKey = false;
+  let latestTestFailed = false;
 
   // 常用模型提供商预设
   const PRESETS = {
-    cpa: {
-      base: "http://127.0.0.1:8317/v1",
-      model: "gemini-3.8-flash-high",
-      key: "123456",
-    },
     bailian: {
       base: "https://dashscope.aliyuncs.com/compatible-mode/v1",
       model: "qwen-plus",
@@ -55,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
     },
     deepseek: {
       base: "https://api.deepseek.com/v1",
-      model: "deepseek-flash",
+      model: "deepseek-chat",
       key: "",
     },
     zhipu: {
@@ -78,12 +79,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // 1. 初始化检查配置与会话历史
   checkConfig();
   loadSessions();
+  loadItineraries();
 
   // 会话操作按钮绑定
   if (btnTopNewChat) btnTopNewChat.addEventListener("click", () => startNewSession());
   if (btnSidebarNewChat) btnSidebarNewChat.addEventListener("click", () => startNewSession());
   if (btnSidebarNewChatTop) btnSidebarNewChatTop.addEventListener("click", () => startNewSession());
   if (btnRefreshSessions) btnRefreshSessions.addEventListener("click", () => loadSessions());
+  if (btnRefreshItineraries) btnRefreshItineraries.addEventListener("click", () => loadItineraries());
   if (btnDownloadActiveChat) btnDownloadActiveChat.addEventListener("click", () => downloadSession(currentSessionId));
 
   // 2. 弹窗交互绑定
@@ -109,9 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (PRESETS[key]) {
         inputApiBase.value = PRESETS[key].base;
         inputModel.value = PRESETS[key].model;
-        if (PRESETS[key].key) {
-          inputApiKey.value = PRESETS[key].key;
-        }
+        inputApiKey.value = "";
       }
     });
   });
@@ -122,13 +123,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const base = inputApiBase.value.trim();
     const model = inputModel.value.trim();
 
-    if (!key) {
-      alert("请输入有效的 API Key 以连接模型服务。");
+    if (!key || !base || !model) {
+      alert("请填写 API 端点、有效的 API Key 和模型代号。");
       return;
     }
 
     btnSaveConfig.disabled = true;
-    btnSaveConfig.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在连接大模型...';
+    btnTestConfig.disabled = true;
+    btnSaveConfig.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在保存配置...';
 
     try {
       const resp = await fetch("/api/config", {
@@ -139,14 +141,41 @@ document.addEventListener("DOMContentLoaded", () => {
       const data = await resp.json();
       if (!resp.ok) throw new Error(data.error || "配置失败");
 
-      alert("🎉 " + data.message);
-      configModal.classList.remove("active");
-      checkConfig();
+      latestTestFailed = false;
+      inputApiKey.value = "";
+      await checkConfig();
+      alert("配置已保存。请点击“测试已保存配置”验证模型是否可用。");
     } catch (e) {
       alert("保存失败: " + e.message);
     } finally {
       btnSaveConfig.disabled = false;
-      btnSaveConfig.innerHTML = '<i class="fa-solid fa-check"></i> 保存并启用配置';
+      btnTestConfig.disabled = false;
+      btnSaveConfig.innerHTML = '<i class="fa-solid fa-check"></i> 保存配置';
+    }
+  });
+
+  btnTestConfig.addEventListener("click", async () => {
+    btnSaveConfig.disabled = true;
+    btnTestConfig.disabled = true;
+    btnTestConfig.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 正在验证模型...';
+    try {
+      const resp = await fetch("/api/config/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await resp.json();
+      if (!resp.ok || data.verified !== true) throw new Error(data.error || "模型验证未通过");
+      latestTestFailed = false;
+      alert("已保存配置的模型测试通过。");
+    } catch (e) {
+      latestTestFailed = true;
+      alert("模型测试失败: " + e.message);
+    } finally {
+      await checkConfig();
+      btnSaveConfig.disabled = false;
+      btnTestConfig.disabled = false;
+      btnTestConfig.innerHTML = '<i class="fa-solid fa-plug"></i> 测试已保存配置';
     }
   });
 
@@ -209,10 +238,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // 9. 清空会话
   btnClearChat.addEventListener("click", async () => {
+    if (!currentSessionId) {
+      alert("当前暂无可重置的对话。");
+      return;
+    }
     if (!confirm("确定要重置当前对话并清空上下文记忆吗？")) return;
     try {
-      await fetch("/api/clear", { method: "POST" });
-      startNewSession();
+      const resp = await fetch("/api/clear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: currentSessionId }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "重置会话失败");
+      await startNewSession();
     } catch (e) {
       alert("清空失败: " + e.message);
     }
@@ -493,7 +532,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function handleStreamEvent(liveMsg, data) {
-    if (data.type === "thought" && data.content) {
+    if (data.type === "session") {
+      if (data.session_id) currentSessionId = data.session_id;
+    } else if (data.type === "thought" && data.content) {
       liveMsg.addThought(data.content);
     } else if (data.type === "tool_call") {
       const tool = data.details ? data.details.tool : (data.content || "");
@@ -516,7 +557,9 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       liveMsg.finish();
       loadSessions();
+      loadItineraries();
     } else if (data.type === "error") {
+      if (data.session_id) currentSessionId = data.session_id;
       liveMsg.showError(data.error);
     }
   }
@@ -528,20 +571,31 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const resp = await fetch("/api/config");
       const data = await resp.json();
-      hasValidApiKey = data.has_key;
+      if (!resp.ok) throw new Error(data.error || "读取配置失败");
+      hasValidApiKey = data.has_key === true;
 
       if (hasValidApiKey) {
-        agentStatusPill.className = "status-pill online";
-        statusLabel.innerHTML = `在线模型 (${data.model})`;
+        const verified = data.verified === true && !latestTestFailed;
+        agentStatusPill.className = verified ? "status-pill online" : "status-pill";
+        const label = verified ? "模型测试通过" : latestTestFailed ? "已配置 · 测试未通过" : "已配置 · 尚未验证";
+        statusLabel.textContent = `${label} (${data.model})`;
+        inputApiBase.value = data.api_base;
+        inputModel.value = data.model;
+        document.querySelectorAll(".preset-pill").forEach((pill) => {
+          pill.classList.toggle("active", PRESETS[pill.dataset.preset]?.base === data.api_base);
+        });
       } else {
         agentStatusPill.className = "status-pill offline";
-        statusLabel.innerHTML = "未配置 API Key (请点击配置)";
+        statusLabel.textContent = "未配置 API Key (请点击配置)";
         // 初次加载若无 Key，轻柔提示用户打开弹窗
         setTimeout(() => {
           configModal.classList.add("active");
         }, 600);
       }
     } catch (e) {
+      hasValidApiKey = false;
+      agentStatusPill.className = "status-pill offline";
+      statusLabel.textContent = "配置状态读取失败，请重试";
       console.warn("检查配置异常", e);
     }
   }
@@ -554,6 +608,7 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       const resp = await fetch("/api/sessions");
       const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "加载会话失败");
       const sessions = data.sessions || [];
       console.log("[TravelAgent] 加载历史对话列表成功:", sessions);
 
@@ -579,7 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <div class="session-item-meta">
             <span>${escapeHtml(s.updated_at ? s.updated_at.slice(5, 16) : '')}</span>
-            <span class="session-badge">${s.turn_count || 1} 轮对话</span>
+            <span class="session-badge">${Number(s.turn_count) || 1} 轮对话</span>
           </div>
         </div>
       `
@@ -606,6 +661,35 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     } catch (e) {
       sessionsContainer.innerHTML = '<div class="empty-state">加载历史会话异常</div>';
+    }
+  }
+
+  async function loadItineraries() {
+    if (!itinerariesContainer) return;
+    try {
+      const resp = await fetch("/api/itineraries");
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || "加载已保存行程失败");
+      itinerariesContainer.replaceChildren();
+      for (const item of data.itineraries || []) {
+        const card = document.createElement("a");
+        card.className = "itinerary-card";
+        card.href = `/api/itinerary/download?filename=${encodeURIComponent(item.filename)}`;
+        card.setAttribute("download", "");
+        const title = document.createElement("span");
+        title.className = "itinerary-card-title";
+        title.textContent = item.filename;
+        const meta = document.createElement("span");
+        meta.className = "itinerary-card-meta";
+        meta.textContent = `${item.size || ""} · 下载`;
+        card.append(title, meta);
+        itinerariesContainer.appendChild(card);
+      }
+      if (!itinerariesContainer.children.length) {
+        itinerariesContainer.textContent = "暂无已保存行程，生成并保存攻略后可在此下载。";
+      }
+    } catch (e) {
+      itinerariesContainer.textContent = "加载已保存行程失败，请刷新重试。";
     }
   }
 
@@ -784,6 +868,7 @@ document.addEventListener("DOMContentLoaded", () => {
           body: JSON.stringify({ title: "新旅游行程规划" }),
         });
         const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || "新建会话失败");
         currentSessionId = data.session_id;
       }
     } catch (e) {
@@ -837,7 +922,7 @@ document.addEventListener("DOMContentLoaded", () => {
       alert("当前暂无可导出的对话记录，请先在下方发送旅游诉求开始规划！");
       return;
     }
-    window.open(`/api/session/download?id=${encodeURIComponent(targetId)}`, "_blank");
+    window.open(`/api/session/download?id=${encodeURIComponent(targetId)}`, "_blank", "noopener,noreferrer");
   }
 
   /**
@@ -880,167 +965,4 @@ document.addEventListener("DOMContentLoaded", () => {
     return `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
   }
 
-  function escapeHtml(str) {
-    if (!str) return "";
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
-  function formatMarkdown(raw) {
-    if (!raw) return "";
-
-    // 1. 保护并抽取代码块
-    const codeBlocks = [];
-    let text = raw.replace(/```([\w-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
-      const idx = codeBlocks.length;
-      codeBlocks.push(
-        `<pre class="code-block"><code class="lang-${escapeHtml(lang)}">${escapeHtml(code.trim())}</code></pre>`
-      );
-      return `\n%%CODE_BLOCK_${idx}%%\n`;
-    });
-
-    // 2. 基础 HTML 实体转义
-    text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-    // 恢复 blockquote 标记 (> 开头)
-    text = text.replace(/^(&gt;|>)\s?(.*)$/gm, "> $2");
-
-    // 3. 逐行解析
-    const lines = text.split("\n");
-    const output = [];
-    let inList = null; // 'ul' | 'ol' | null
-    let tableRows = [];
-
-    function closeList() {
-      if (inList) {
-        output.push(`</${inList}>`);
-        inList = null;
-      }
-    }
-
-    function flushTable() {
-      if (tableRows.length === 0) return;
-      let html = '<div class="table-container"><table class="md-table">';
-      let isHeader = true;
-      for (let i = 0; i < tableRows.length; i++) {
-        const row = tableRows[i];
-        if (i === 1 && row.every((cell) => /^:?-+:?$/.test(cell.trim()))) {
-          continue;
-        }
-        if (isHeader) {
-          html += '<thead><tr>' + row.map((c) => `<th>${c}</th>`).join("") + '</tr></thead><tbody>';
-          isHeader = false;
-        } else {
-          html += '<tr>' + row.map((c) => `<td>${c}</td>`).join("") + '</tr>';
-        }
-      }
-      if (!isHeader) html += '</tbody>';
-      html += '</table></div>';
-      output.push(html);
-      tableRows = [];
-    }
-
-    for (let i = 0; i < lines.length; i++) {
-      let line = lines[i];
-
-      // 检查代码块
-      if (/^%%CODE_BLOCK_(\d+)%%$/.test(line.trim())) {
-        closeList();
-        flushTable();
-        const blockIdx = parseInt(RegExp.$1, 10);
-        output.push(codeBlocks[blockIdx]);
-        continue;
-      }
-
-      // 检查 Markdown 表格
-      if (line.trim().startsWith("|") && line.trim().endsWith("|")) {
-        closeList();
-        const cells = line.trim().slice(1, -1).split("|").map((c) => c.trim());
-        tableRows.push(cells);
-        continue;
-      } else {
-        flushTable();
-      }
-
-      // 检查水平分割线
-      if (/^(\-{3,}|\*{3,}|_{3,})$/.test(line.trim())) {
-        closeList();
-        output.push('<hr class="md-hr" />');
-        continue;
-      }
-
-      // 检查各级标题 (h1 到 h6，尤其彻底支持 #### 与 #####)
-      const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
-      if (headingMatch) {
-        closeList();
-        const level = headingMatch[1].length;
-        const hText = headingMatch[2];
-        output.push(`<h${level} class="md-h${level}">${hText}</h${level}>`);
-        continue;
-      }
-
-      // 检查引用块
-      if (line.startsWith("> ")) {
-        closeList();
-        const quoteText = line.slice(2);
-        output.push(`<blockquote class="md-quote">${quoteText}</blockquote>`);
-        continue;
-      }
-
-      // 检查无序列表
-      const ulMatch = line.match(/^[\s]*[-*+•]\s+(.*)$/);
-      if (ulMatch) {
-        if (inList !== "ul") {
-          closeList();
-          output.push('<ul class="md-ul">');
-          inList = "ul";
-        }
-        output.push(`<li>${ulMatch[1]}</li>`);
-        continue;
-      }
-
-      // 检查有序列表
-      const olMatch = line.match(/^[\s]*(\d+)\.\s+(.*)$/);
-      if (olMatch) {
-        if (inList !== "ol") {
-          closeList();
-          output.push('<ol class="md-ol">');
-          inList = "ol";
-        }
-        output.push(`<li>${olMatch[2]}</li>`);
-        continue;
-      }
-
-      // 普通空行
-      if (!line.trim()) {
-        closeList();
-        continue;
-      }
-
-      // 普通段落
-      closeList();
-      output.push(`<p class="md-p">${line}</p>`);
-    }
-
-    closeList();
-    flushTable();
-
-    let resultHtml = output.join("\n");
-
-    // 4. 行内语法处理
-    // 粗体
-    resultHtml = resultHtml.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-    // 斜体
-    resultHtml = resultHtml.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>");
-    // 行内代码
-    resultHtml = resultHtml.replace(/`([^`]+)`/g, '<code class="md-inline-code">$1</code>');
-    // 链接
-    resultHtml = resultHtml.replace(/\[(.*?)\]\((.*?)\)/g, '<a href="$2" target="_blank" rel="noopener" class="md-link">$1</a>');
-
-    return resultHtml;
-  }
 });

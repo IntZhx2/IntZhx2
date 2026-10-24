@@ -121,6 +121,15 @@
             <div class="empty-state">暂无历史对话，开启规划后将自动保存在此</div>
           </div>
         </div>
+        <div class="sidebar-section">
+          <div class="section-title">
+            <span><i class="fa-solid fa-file-arrow-down"></i> 已保存行程</span>
+            <button class="btn-text-action" id="btn-refresh-itineraries" title="刷新已保存行程"><i class="fa-solid fa-rotate-right"></i></button>
+          </div>
+          <div class="itinerary-list" id="itineraries-container" aria-live="polite">
+            <div class="empty-state">正在加载已保存行程...</div>
+          </div>
+        </div>
       </aside>
 
       <!-- 右侧：智能体对话与攻略生成主舞台 -->
@@ -218,7 +227,7 @@
         <div class="modal-alert">
           <i class="fa-solid fa-circle-info"></i>
           <div>
-            请配置并连接大语言模型服务，系统将通过模型与气象/交通接口为您提供个性化旅行规划。
+            请填写您自己的模型服务配置。保存后可单独测试已保存配置；测试会向服务商发送一次简短请求，可能计入用量。
           </div>
         </div>
 
@@ -226,9 +235,8 @@
         <div class="form-field">
           <label>快速选用服务商：</label>
           <div class="preset-chips">
-            <button class="preset-pill active" data-preset="cpa">💻 本地 CPA</button>
             <button class="preset-pill" data-preset="bailian">🌟 阿里云百炼 (Qwen)</button>
-            <button class="preset-pill" data-preset="deepseek">🚀 DeepSeek 官方</button>
+            <button class="preset-pill active" data-preset="deepseek">🚀 DeepSeek 官方</button>
             <button class="preset-pill" data-preset="zhipu">💡 智谱 BigModel</button>
             <button class="preset-pill" data-preset="openai">🌐 OpenAI</button>
           </div>
@@ -236,25 +244,28 @@
 
         <div class="form-field">
           <label for="input-api-base">API 端点 (Base URL)：</label>
-          <input type="text" id="input-api-base" value="http://127.0.0.1:8317/v1" />
+          <input type="text" id="input-api-base" value="https://api.deepseek.com/v1" placeholder="您使用的 OpenAI 兼容 API 端点" />
         </div>
 
         <div class="form-field">
           <label for="input-api-key">API 密钥 (API Key)：<span class="required">*必填</span></label>
-          <input type="password" id="input-api-key" placeholder="本地 CPA 默认通常为 123456" value="123456" autocomplete="off" />
-          <span class="field-tips">本地 CPA 访问密钥默认为 123456；若使用云端 API 请输入对应 sk-xxx。</span>
+          <input type="password" id="input-api-key" placeholder="请输入您自己的 API Key" autocomplete="off" />
+          <span class="field-tips">预设仅提供端点与模型示例，请填写对应服务商的真实密钥。切换服务商后需重新填写密钥。</span>
         </div>
 
         <div class="form-field">
           <label for="input-model">模型代号 (Model Name)：</label>
-          <input type="text" id="input-model" value="gemini-3.8-flash-high" />
-          <span class="field-tips">模型代号需与服务端一致。本地 CPA 请填 <code>gemini-3.8-flash-high</code>；DeepSeek 官方请填 <code>deepseek-flash</code> 或 <code>deepseek-v4-pro</code>。</span>
+          <input type="text" id="input-model" value="deepseek-chat" />
+          <span class="field-tips">模型代号需与您的服务商及账号权限一致，例如 DeepSeek 官方的 <code>deepseek-chat</code>。保存配置不代表连接成功。</span>
         </div>
       </div>
 
-      <div class="modal-actions-bar">
+      <div class="modal-actions-bar" style="gap: 8px; flex-wrap: wrap;">
+        <button class="nav-btn" id="btn-test-config" title="测试服务器当前已保存的配置；修改表单后请先保存">
+          <i class="fa-solid fa-plug"></i> 测试已保存配置
+        </button>
         <button class="btn-confirm-save" id="btn-save-config">
-          <i class="fa-solid fa-check"></i> 保存并启用配置
+          <i class="fa-solid fa-check"></i> 保存配置
         </button>
       </div>
     </div>
@@ -262,6 +273,7 @@
 
   <!-- 前端逻辑引入 -->
   <script src="/speech.js?v=20261023_v9"></script>
-  <script src="/app.js?v=20261023_v9"></script>
+  <script src="/safe_markdown.js?v=20261024_security"></script>
+  <script src="/app.js?v=20261024_security"></script>
 </body>
 </html>

@@ -1,0 +1,35 @@
+name: Smart Agent acceptance
+
+on:
+  push:
+    paths:
+      - 'smart_agent/**'
+      - '.github/workflows/smart-agent.yml'
+  pull_request:
+    paths:
+      - 'smart_agent/**'
+      - '.github/workflows/smart-agent.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.9', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python acceptance including loopback HTTP
+        run: python smart_agent/main.py --test
+      - name: Frontend security and interaction
+        run: node --test smart_agent/tests/test_frontend_security.js
+      - name: Whitespace
+        run: git diff --check

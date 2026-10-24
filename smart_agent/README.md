@@ -27,7 +27,7 @@ CLI 可以通过环境变量配置（也支持网页配置，但 CLI 使用环�
 export OPENAI_BASE_URL="https://api.deepseek.com/v1"
 export OPENAI_API_KEY="你的模型Key"
 export AGENT_MODEL="deepseek-chat"
-export BAIDU_MAPS_AK="你自己的百度地图服务端AK"
+# 已有本地地图配置时，无需再 export BAIDU_MAPS_AK。
 python3 smart_agent/main.py --cli
 ```
 
@@ -43,7 +43,21 @@ python3 smart_agent/main.py --cli
 | itinerary_save | 仅在工作区创建纯文件名的 Markdown/TXT 文件，拒绝越界、符号链接及覆盖已有文件 |
 | itinerary_list | 列出已保存行程；网页可下载文档 |
 
-百度工具需要自己配置 BAIDU_MAPS_AK，并在控制台开启相应接口权限；仓库不附带可用凭据。旧版 ENCRYPTED_BAIDU_AK 仅为兼容环境配置，不提供安全保密能力。旧版本曾包含可恢复的内置 AK，如该 AK 属于你的真实应用，应在控制台撤销或轮换；删除最新源码不能撤回已公开的历史。
+### 地图 AK：本地保存一次，启动自动使用
+
+已有可用 AK 可以继续使用，不必重新申请。网页、CLI 和 MCP stdio 都会自动读取 smart_agent/data/maps_config.json（路径相对项目所在位置，不受启动目录影响）：
+
+```json
+{
+  "baidu_maps_ak": "填写已有的百度地图服务端AK"
+}
+```
+
+该文件已被 Git 忽略；可参考 data/maps_config.example.json，创建后在 macOS/Linux 执行 chmod 600 smart_agent/data/maps_config.json，仅允许当前用户读写。已迁移本地配置的电脑不需要重复填写；修改后重启程序即可。它是本地明文配置，不是加密保险箱，不要放进公开仓库或截图里。
+
+读取优先级为 BAIDU_MAPS_AK 环境变量、旧版 ENCRYPTED_BAIDU_AK 环境配置、本地文件；显式传给客户端的 AK 优先于以上来源。无配置或文件损坏时按未配置处理，不会偷偷尝试网络请求。设置环境变量也可以覆盖本地配置：export BAIDU_MAPS_AK="已有的AK"。
+
+公开仓库不分发实际凭据，因此全新下载到其他电脑时仍需复制本人获授权使用的本地配置，或提供自己的 AK；本机自动读取不代表所有下载者免配置。旧版 XOR 混淆可逆，公开历史中的凭据仍可被恢复；是否轮换由凭据所有者决定。本次不会撤销或轮换现有 AK，服务端权限、IP 白名单和配额仍由百度控制台管理。
 
 到达时间、费用和游玩安排是基于已知数据的建议，未实现数学约束求解器，不能保证准点。票价、预约与营业状态应以官方最新信息为准。
 

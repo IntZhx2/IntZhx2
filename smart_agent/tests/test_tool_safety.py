@@ -363,6 +363,82 @@ class TestMapPacingAndConfiguration(IsolatedToolsTestCase):
             self.assertAlmostEqual(fake_time.sleep.call_args_list[1].args[0], 0.15)
 
 
+class TestLocalMapConfiguration(unittest.TestCase):
+    """始终使用临时文件，不能读取开发者真实 AK 或访问地图接口。"""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.path = Path(temporary.name) / "maps_config.json"
+        patches = [
+            mock.patch.object(baidu_map, "MAPS_CONFIG_FILE", self.path),
+            mock.patch.object(baidu_map, "BAIDU_MAPS_AK_ENV", ""),
+            mock.patch.object(baidu_map, "ENCRYPTED_BAIDU_AK", ""),
+            mock.patch.dict(os.environ, {"BAIDU_MAPS_AK": ""}),
+            mock.patch("urllib.request.urlopen", side_effect=AssertionError("禁止外部请求")),
+        ]
+        for patcher in patches:
+            started = patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(started.assert_not_called)
+
+    def write_config(self, data):
+        self.path.write_text(json.dumps(data), encoding="utf-8")
+
+    def test_local_key_is_used_by_default_client(self):
+        self.write_config({"baidu_maps_ak": " local-test-ak "})
+        self.assertEqual(baidu_map.get_baidu_ak(), "local-test-ak")
+        self.assertEqual(baidu_map.BaiduMapClient().ak, "local-test-ak")
+
+    def test_environment_overrides_local_without_opening_file(self):
+        with mock.patch.dict(os.environ, {"BAIDU_MAPS_AK": "env-test-ak"}), mock.patch.object(
+            Path, "open", side_effect=AssertionError("环境配置应优先")
+        ):
+            self.assertEqual(baidu_map.get_baidu_ak(), "env-test-ak")
+        with mock.patch.object(baidu_map, "BAIDU_MAPS_AK_ENV", "startup-test-ak"):
+            self.assertEqual(baidu_map.get_baidu_ak(), "startup-test-ak")
+
+    def test_explicit_and_legacy_keys_keep_precedence(self):
+        self.write_config({"baidu_maps_ak": "local-test-ak"})
+        with mock.patch.object(baidu_map, "ENCRYPTED_BAIDU_AK", encrypt_token("legacy-test-ak")):
+            self.assertEqual(baidu_map.get_baidu_ak(), "legacy-test-ak")
+        self.assertEqual(baidu_map.BaiduMapClient(ak="explicit-test-ak").ak, "explicit-test-ak")
+
+    def test_invalid_legacy_value_falls_back_to_local(self):
+        self.write_config({"baidu_maps_ak": "local-test-ak"})
+        with mock.patch.object(baidu_map, "ENCRYPTED_BAIDU_AK", "invalid"):
+            self.assertEqual(baidu_map.get_baidu_ak(), "local-test-ak")
+
+    def test_missing_unreadable_and_malformed_files_are_unconfigured(self):
+        self.assertEqual(baidu_map.get_baidu_ak(), "")
+        with mock.patch.object(Path, "open", side_effect=PermissionError("not readable")):
+            self.assertEqual(baidu_map.get_baidu_ak(), "")
+        for raw in ("{", "", "[" * 2000, '{"baidu_maps_ak": "' + "x" * 16384 + '"}'):
+            with self.subTest(length=len(raw)):
+                self.path.write_text(raw, encoding="utf-8")
+                self.assertEqual(baidu_map.get_baidu_ak(), "")
+        self.path.write_bytes(b"\xff")
+        self.assertEqual(baidu_map.get_baidu_ak(), "")
+
+    def test_invalid_shapes_and_values_are_unconfigured(self):
+        for data in (None, [], "text", 42, {}, {"other": "value"}):
+            with self.subTest(data=data):
+                self.write_config(data)
+                self.assertEqual(baidu_map.get_baidu_ak(), "")
+        for value in (None, True, 12, [], {}, "", "  ", "a b", "a\nb", "x" * 1025):
+            with self.subTest(value_type=type(value).__name__):
+                self.write_config({"baidu_maps_ak": value})
+                self.assertEqual(baidu_map.get_baidu_ak(), "")
+
+    def test_configuration_is_reloaded_for_new_clients(self):
+        self.write_config({"baidu_maps_ak": "first-test-ak"})
+        first = baidu_map.BaiduMapClient()
+        self.write_config({"baidu_maps_ak": "second-test-ak"})
+        second = baidu_map.BaiduMapClient()
+        self.assertEqual(first.ak, "first-test-ak")
+        self.assertEqual(second.ak, "second-test-ak")
+
+
 original_get_baidu_ak = baidu_map.get_baidu_ak
 
 

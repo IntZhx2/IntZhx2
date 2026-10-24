@@ -1,5 +1,6 @@
 .env
 .env.local
 data/llm_config.json
+data/maps_config.json
 data/.llm-*
 data/sessions/.session-*

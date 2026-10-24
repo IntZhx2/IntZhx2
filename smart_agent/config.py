@@ -19,6 +19,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 WORKSPACE_DIR = DATA_DIR / "workspace"
 SESSIONS_DIR = DATA_DIR / "sessions"
+MAPS_CONFIG_FILE = DATA_DIR / "maps_config.json"
 
 # 自动创建必要数据目录
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,7 +35,7 @@ API_BASE = os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com/v1")
 API_KEY = os.environ.get("OPENAI_API_KEY", "")
 DEFAULT_MODEL = os.environ.get("AGENT_MODEL", "deepseek-chat")
 
-# 百度地图凭据由部署环境提供，仓库不附带默认凭据。
+# 百度地图凭据可由环境或本地 maps_config.json 提供，仓库不附带默认凭据。
 # ENCRYPTED_BAIDU_AK 仅兼容旧版可逆 XOR 混淆格式，不是安全密钥存储。
 BAIDU_MAPS_AK_ENV = os.environ.get("BAIDU_MAPS_AK", "")
 ENCRYPTED_BAIDU_AK = os.environ.get("ENCRYPTED_BAIDU_AK", "")

@@ -1,7 +1,7 @@
 """
 百度地图 WebService API 客户端 (Baidu Maps API Client)
 提供经纬度地理编码 (Geocoding)、全国跨城/同城路线规划 (DirectionLite) 及 POI 深度检索 (Place API)。
-凭据从部署环境读取；兼容的旧版 XOR 混淆格式不提供安全存储。
+凭据从环境或本地配置自动读取；兼容的旧版 XOR 混淆格式不提供安全存储。
 """
 
 import os
@@ -12,7 +12,7 @@ import threading
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, Optional, Tuple
-from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK
+from smart_agent.config import BAIDU_MAPS_AK_ENV, ENCRYPTED_BAIDU_AK, MAPS_CONFIG_FILE
 from smart_agent.utils.security import decrypt_token
 
 # 进程内地理编码与 POI 高速缓存（避免重复请求消耗 QPS 与配额）
@@ -38,7 +38,7 @@ def _rate_limit_pace(min_interval: float = 0.35):
 
 
 def get_baidu_ak() -> str:
-    """读取部署提供的 AK，兼容由环境显式提供的旧版混淆文本。"""
+    """环境优先，再自动读取本地 AK；不请求网络，也不在错误中输出凭据。"""
     env_ak = os.environ.get("BAIDU_MAPS_AK", "").strip() or BAIDU_MAPS_AK_ENV.strip()
     if env_ak:
         return env_ak
@@ -46,6 +46,20 @@ def get_baidu_ak() -> str:
         decrypted = decrypt_token(ENCRYPTED_BAIDU_AK)
         if decrypted:
             return decrypted
+    try:
+        # 有界读取，损坏/缺失配置保持未配置状态，避免影响其他工具启动。
+        with MAPS_CONFIG_FILE.open("r", encoding="utf-8") as stream:
+            raw = stream.read(16385)
+        if len(raw) > 16384:
+            return ""
+        data = json.loads(raw)
+        value = data.get("baidu_maps_ak") if isinstance(data, dict) else None
+        if isinstance(value, str):
+            value = value.strip()
+            if value and len(value) <= 1024 and not any(char.isspace() for char in value):
+                return value
+    except (OSError, ValueError, RecursionError):
+        pass
     return ""
 
 

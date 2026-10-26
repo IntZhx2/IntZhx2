@@ -7,10 +7,27 @@
 import urllib.request
 import urllib.parse
 import json
+import math
 from typing import Any, Dict
 from smart_agent.tools.base import BaseTool
 from smart_agent.mcp.protocol import ToolCallResult
 from smart_agent.tools.baidu_map import BaiduMapClient
+
+
+def _aqi_label(value: Any) -> str:
+    """按 AQI 数值分级，缺失或无效数据不能视为优良。"""
+    if isinstance(value, bool):
+        return "未知"
+    try:
+        aqi = float(value)
+    except (TypeError, ValueError):
+        return "未知"
+    if not math.isfinite(aqi) or not 0 <= aqi <= 500:
+        return "未知"
+    for upper, label in ((50, "优"), (100, "良"), (150, "轻度污染"),
+                         (200, "中度污染"), (300, "重度污染"), (500, "严重污染")):
+        if aqi <= upper:
+            return label
 
 
 class WeatherQueryTool(BaseTool):
@@ -40,9 +57,10 @@ class WeatherQueryTool(BaseTool):
         }
 
     def execute(self, **kwargs) -> ToolCallResult:
-        city = kwargs.get("city", "").strip()
-        if not city:
+        city = kwargs.get("city", "")
+        if not isinstance(city, str) or not city.strip():
             return ToolCallResult.text("错误: city 城市名称不能为空", is_error=True)
+        city = city.strip()
 
         # 1. 优先调用百度地图官方气象服务 (毫秒级响应，包含原生穿衣/紫外线/感冒指数)
         if self.baidu_client.is_configured:
@@ -55,7 +73,7 @@ class WeatherQueryTool(BaseTool):
                     f"- ☁️ 天气状态: {w_data['text']}\n"
                     f"- 💧 相对湿度: {w_data['rh']}%\n"
                     f"- 🍃 风向风力: {w_data['wind_dir']} {w_data['wind_class']}\n"
-                    f"- 🌿 空气质量: AQI {w_data['aqi']} (优/良)\n"
+                    f"- 🌿 空气质量: AQI {w_data.get('aqi', '--')} ({_aqi_label(w_data.get('aqi'))})\n"
                     f"- 🌐 数据来源: 百度地图实时气象监测服务 (Weather API)"
                     f"{tips_block}"
                 )

@@ -54,7 +54,7 @@ class AgentRunResult:
 
 
 class SmartAgent:
-    """具备能说会做特性的全功能智能体"""
+    """负责多轮对话与工具调用的旅游规划智能体"""
 
     def __init__(
         self,
@@ -68,6 +68,34 @@ class SmartAgent:
         self.llm_client = llm_client
         self.max_turns = max_turns
 
+    @staticmethod
+    def _validate_response(response: Any, allow_tool_calls: bool = True) -> Dict[str, Any]:
+        """Reject malformed model frames before recording or executing any tool calls."""
+        if not isinstance(response, dict):
+            raise ValueError("Model response must be an object")
+        content = response.get("content")
+        if content is not None and not isinstance(content, str):
+            raise ValueError("Model response content must be a string or null")
+        calls = response.get("tool_calls")
+        if calls is not None and not isinstance(calls, list):
+            raise ValueError("Model tool_calls must be an array or null")
+        if calls and not allow_tool_calls:
+            raise ValueError("Model synthesis must return an answer without tool calls")
+        seen_ids = set()
+        for call in calls or []:
+            if not isinstance(call, dict):
+                raise ValueError("Each model tool call must be an object")
+            call_id = call.get("id")
+            function = call.get("function")
+            if not isinstance(call_id, str) or not call_id or call_id in seen_ids:
+                raise ValueError("Model tool call IDs must be nonempty, unique strings")
+            seen_ids.add(call_id)
+            if (call.get("type", "function") != "function"
+                    or not isinstance(function, dict)
+                    or not isinstance(function.get("name"), str) or not function["name"]):
+                raise ValueError("Model tool call must specify a function name")
+        return response
+
     def run(
         self,
         user_input: str,
@@ -75,8 +103,19 @@ class SmartAgent:
         on_step_callback: Optional[Callable[[AgentStepTrace], None]] = None,
     ) -> AgentRunResult:
         """接收用户自然语言输入，启动 ReAct 认知规划并执行工具调用"""
+        self.memory.begin_turn(user_input)
+        try:
+            return self._run_turn(user_input, on_step or on_step_callback)
+        except BaseException:
+            self.memory.rollback_turn()
+            raise
+
+    def _run_turn(
+        self,
+        user_input: str,
+        step_callback: Optional[Callable[[AgentStepTrace], None]],
+    ) -> AgentRunResult:
         traces: List[AgentStepTrace] = []
-        step_callback = on_step or on_step_callback
 
         def _emit(trace: AgentStepTrace):
             traces.append(trace)
@@ -86,9 +125,8 @@ class SmartAgent:
                 except Exception:
                     pass
 
-        # 1. 记录用户输入至记忆
+        # 1. 用户输入已由 run 写入，开始记录本轮执行耗时
         start_time = time.time()
-        self.memory.add_user_message(user_input)
 
         final_answer = ""
         current_turn = 0
@@ -102,7 +140,9 @@ class SmartAgent:
             messages = self.memory.get_messages()
 
             # 调用大模型/本地语义引擎做出行动决策
-            response = self.llm_client.chat_completion(messages, tools=tools_schema)
+            response = self._validate_response(
+                self.llm_client.chat_completion(messages, tools=tools_schema)
+            )
             tool_calls = response.get("tool_calls")
             assistant_content = (response.get("content") or "").strip()
 
@@ -134,8 +174,9 @@ class SmartAgent:
                 if isinstance(raw_args, str):
                     try:
                         args = json.loads(raw_args)
-                    except Exception:
-                        args = {}
+                    except (ValueError, TypeError):
+                        # Let the central MCP boundary reject malformed arguments.
+                        args = raw_args
                 else:
                     args = raw_args
 
@@ -160,36 +201,49 @@ class SmartAgent:
                 # 将工具执行结果作为 tool 角色消息写入对话记忆
                 self.memory.add_tool_message(tool_call_id=tool_id, name=tool_name, content=res_text)
 
-        # 3. 终结汇总保障：若 final_answer 仍为空，剥离 tools 参数强制要求大模型汇总生成完整长文
+        # 3. 尚无最终答案时，不传 tools 参数，尝试汇总已有观察
         if not final_answer:
             synth_messages = list(self.memory.get_messages())
+            failed_calls = [
+                {"tool": trace.details["tool"], "call_id": trace.details["call_id"]}
+                for trace in traces
+                if trace.step_type == "tool_result" and trace.details.get("is_error")
+            ]
             synth_messages.append({
                 "role": "user",
                 "content": (
-                    "现在所有相关气象、景点门票预约和交通路线工具已调用完毕。"
-                    "请根据上面所有工具获得的真实数据，严格满足我的出行偏好与时间约束，"
-                    "为我撰写包含【早中晚完整时间线、景点核心亮点与门票预约、具体地铁/打车换乘耗时、周边地道老字号美食必吃菜品】"
-                    "的一条龙深度定制旅游攻略。请使用优雅的 Markdown 格式输出（包含表格与各级标题）。"
+                    "请依据原始出行要求和上面的实际工具观察结果汇总行程。"
+                    "不能假定所有查询均已完成或成功；is_error=True 的结果不可作为已核实数据，"
+                    "失败或尚未查询的信息必须标注为不可用或待核实，不得编造补齐。"
+                    "本地静态资料必须注明来源性质，不得表述为实时天气、票价、预约余量或实时路况。"
+                    "将到达时间和交通耗时明确写为估算，说明仍需核实的行程约束，不得保证准时到达。"
+                    "在证据支持的范围内，提供早中晚时间线、景点与门票预约、交通换乘和当地美食建议，"
+                    "使用清晰的 Markdown 格式；缺失的信息明确留待核实。"
+                    "本轮工具失败记录（is_error=True）："
+                    + json.dumps(failed_calls, ensure_ascii=False)
                 ),
             })
             try:
-                synth_resp = self.llm_client.chat_completion(synth_messages, tools=None)
+                synth_resp = self._validate_response(
+                    self.llm_client.chat_completion(synth_messages, tools=None),
+                    allow_tool_calls=False,
+                )
                 final_answer = (synth_resp.get("content") or "").strip()
                 if final_answer:
                     self.memory.add_assistant_message(final_answer)
                     _emit(AgentStepTrace(step_type="answer", content=final_answer))
             except Exception as e:
-                logger.error(f"强制生成攻略长文失败: {e}")
+                logger.warning("强制生成攻略长文失败 (%s)", type(e).__name__)
                 raise
 
-        # 4. 彻底杜绝敷衍模板
+        # 4. 模型仍未返回正文时，提供明确的失败提示
         if not final_answer:
             final_answer = "⚠️ 大模型未返回最终攻略正文，请检查网络或重新点击生成。"
             self.memory.add_assistant_message(final_answer)
             _emit(AgentStepTrace(step_type="answer", content=final_answer))
 
-        # 5. 清理本轮 ReAct 过程中的工具中间报文，压缩为纯净的 user -> assistant 对
-        # 彻底解决不同大模型（如 DeepSeek 与 Gemini）之间 tool_calls 协议与格式冲突
+        # 5. 将本轮工具中间报文压缩为 user -> assistant 文本对，
+        # 减少历史工具报文对后续模型调用的格式影响。
         self.memory.compact_last_turn(user_input, final_answer)
 
         elapsed_sec = time.time() - start_time

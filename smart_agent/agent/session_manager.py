@@ -7,9 +7,23 @@ import json
 import time
 import uuid
 import re
+import os
+import tempfile
+import threading
+from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from smart_agent.config import SESSIONS_DIR
+
+_SESSION_IO_LOCK = threading.RLock()
+
+
+def _serialized(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with _SESSION_IO_LOCK:
+            return function(*args, **kwargs)
+    return wrapped
 
 
 class SessionManager:
@@ -17,11 +31,15 @@ class SessionManager:
 
     @staticmethod
     def _get_session_path(session_id: str) -> Path:
-        # 移除非法文件名字符
-        safe_id = re.sub(r"[^a-zA-Z0-9_\-]", "", session_id)
-        return SESSIONS_DIR / f"{safe_id}.json"
+        if not isinstance(session_id, str) or not re.fullmatch(r"[a-zA-Z0-9_-]{1,128}", session_id):
+            raise ValueError("无效的会话 ID")
+        path = SESSIONS_DIR / f"{session_id}.json"
+        if path.is_symlink():
+            raise ValueError("会话文件不能是符号链接")
+        return path
 
     @classmethod
+    @_serialized
     def list_sessions(cls) -> List[Dict[str, Any]]:
         """列出所有历史会话，按最近更新时间倒序排序"""
         sessions = []
@@ -48,6 +66,7 @@ class SessionManager:
         return sessions
 
     @classmethod
+    @_serialized
     def get_session(cls, session_id: str) -> Optional[Dict[str, Any]]:
         """获取单个会话的全部历史与消息"""
         path = cls._get_session_path(session_id)
@@ -60,10 +79,11 @@ class SessionManager:
             return None
 
     @classmethod
+    @_serialized
     def create_new_session(cls, title: str = "新旅游行程规划") -> Dict[str, Any]:
         """初始化一个全新的会话"""
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
-        sess_id = f"sess_{time.strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:4]}"
+        sess_id = f"sess_{uuid.uuid4().hex}"
         session_data = {
             "session_id": sess_id,
             "title": title,
@@ -77,16 +97,25 @@ class SessionManager:
         return session_data
 
     @classmethod
+    @_serialized
     def save_session(cls, session_data: Dict[str, Any]):
         """持久化会话数据到文件"""
         sess_id = session_data.get("session_id")
         if not sess_id:
             return
         path = cls._get_session_path(sess_id)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(session_data, f, ensure_ascii=False, indent=2)
+        SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=".session-", dir=SESSIONS_DIR)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(session_data, f, ensure_ascii=False, indent=2)
+            os.replace(temporary, path)
+        finally:
+            if os.path.exists(temporary):
+                os.unlink(temporary)
 
     @classmethod
+    @_serialized
     def append_turn(
         cls,
         session_id: str,
@@ -132,6 +161,7 @@ class SessionManager:
         return session
 
     @classmethod
+    @_serialized
     def delete_session(cls, session_id: str) -> bool:
         """删除会话文件"""
         path = cls._get_session_path(session_id)

@@ -1,15 +1,16 @@
 """
 景点深度情报与美食打卡工具 (Attraction & Gourmet Tool)
 结合百度地图 Place API POI 深度检索与精选文旅知识图谱，
-提供全国旅游景点的真实地址、开放时间、评分、游玩时长建议、门票预约及周边地道美食。
+提供地点检索信息与静态游览建议；静态票价、开放时间与预约规则需另行核实。
 """
 
+import unicodedata
 from typing import Any, Dict
 from smart_agent.tools.base import BaseTool
 from smart_agent.mcp.protocol import ToolCallResult
 from smart_agent.tools.baidu_map import BaiduMapClient
 
-# 核心景点与特色美食深度知识图谱（带详细预约规则与老字号美食指南）
+# 静态参考资料，不代表实时票价、营业时间、预约状态或餐馆经营情况。
 ATTRACTION_KNOWLEDGE = {
     "广州塔": {
         "city": "广州",
@@ -68,6 +69,25 @@ ATTRACTION_KNOWLEDGE = {
 }
 
 
+ATTRACTION_ALIASES = {
+    "广州塔": ("广州塔", "小蛮腰"),
+    "永庆坊": ("永庆坊", "广州永庆坊"),
+    "沙面": ("沙面", "沙面岛"),
+    "广东省博物馆": ("广东省博物馆", "广东省博物馆新馆"),
+    "越秀公园": ("越秀公园", "广州越秀公园"),
+    "北京路步行街": ("北京路步行街", "北京路"),
+}
+
+
+def _normalize_name(value: str) -> str:
+    return "".join(unicodedata.normalize("NFKC", value).split()).casefold()
+
+
+def _normalize_city(value: str) -> str:
+    normalized = _normalize_name(value)
+    return normalized[:-1] if normalized.endswith("市") else normalized
+
+
 class AttractionInfoTool(BaseTool):
     def __init__(self):
         super().__init__()
@@ -80,9 +100,8 @@ class AttractionInfoTool(BaseTool):
     @property
     def description(self) -> str:
         return (
-            "查询旅游景点的深度详细信息与周边地道美食推荐。"
-            "包含景点的真实地址、最佳游玩时间段、建议停留时长、门票与提前预约规则、核心打卡机位，"
-            "以及周边步行可达的正宗老字号餐厅与招牌菜品推荐。"
+            "按城市与景点名称查询百度地图地点信息或本地静态游览、美食提示。"
+            "本地资料仅按明确别名与城市精确匹配；票价、开放时间和预约规则需核实官方最新公告。"
         )
 
     @property
@@ -103,30 +122,35 @@ class AttractionInfoTool(BaseTool):
         }
 
     def execute(self, **kwargs) -> ToolCallResult:
-        city = kwargs.get("city", "广州").strip()
-        name = kwargs.get("attraction_name", "").strip()
+        city = kwargs.get("city", "")
+        name = kwargs.get("attraction_name", "")
 
-        if not name:
+        if not isinstance(city, str) or not city.strip():
+            return ToolCallResult.text("错误: city 城市名称不能为空且必须为字符串", is_error=True)
+        if not isinstance(name, str) or not name.strip():
             return ToolCallResult.text("错误: attraction_name 景点名称不能为空", is_error=True)
+        city, name = city.strip(), name.strip()
 
         # 1. 优先命中本地深度文旅知识库
         matched_info = None
         for k, v in ATTRACTION_KNOWLEDGE.items():
-            if k in name or name in k:
+            if (_normalize_city(city) == _normalize_city(v["city"])
+                    and _normalize_name(name) in {_normalize_name(alias) for alias in ATTRACTION_ALIASES[k]}):
                 matched_info = (k, v)
                 break
 
         if matched_info:
             full_name, data = matched_info
             res = (
-                f"🏛️ 【{city} · {full_name} 游览与美食深度攻略】\n"
+                f"🏛️ 【{data['city']} · {full_name} 游览与美食静态参考】\n"
+                f"⚠️ 以下为静态提示，非实时信息；票价、开放时间、预约规则与餐馆营业情况请以官方最新公告为准。\n"
                 f"- 🏷️ 景点定位: {data['tag']}\n"
                 f"- ⏱️ 建议时长: {data['duration']}\n"
                 f"- ⏰ 黄金游览时段: {data['best_time']}\n"
                 f"- 🎟️ 门票与预约要求: {data['booking']}\n"
                 f"- 📸 核心机位与打卡亮点: {data['highlights']}\n"
                 f"- 🍽️ 周边招牌美食推荐: {data['gourmet']}\n"
-                f"- 📍 数据来源: 本地已核验精品文旅智库"
+                f"- 📍 数据来源: 本地静态文旅参考资料（未经实时核验）"
             )
             return ToolCallResult.text(res)
 

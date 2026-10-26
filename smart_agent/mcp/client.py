@@ -1,6 +1,7 @@
 """
-Model Context Protocol (MCP) 客户端实现
-由智能体核心调用，负责连接 MCP 服务端、拉取工具目录及发起安全工具执行。
+Model Context Protocol (MCP) 客户端实现。
+In-process partial MCP 2024-11-05 adapter, without an official SDK dependency.
+Supports initialize/initialized and tools; no transport or full MCP lifecycle.
 """
 
 from typing import Any, Dict, List, Optional
@@ -22,13 +23,43 @@ class MCPClient:
     def __init__(self, server: MCPServer):
         self._server = server
         self._cached_tools: Optional[List[ToolDefinition]] = None
+        self._initialized = False
+        self.server_info: Optional[Dict[str, Any]] = None
+
+    def initialize(self) -> Dict[str, Any]:
+        """Complete the handshake once, before listing or calling tools."""
+        if self._initialized:
+            return self.server_info
+        req = JSONRPCRequest(
+            method="initialize",
+            params={
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "SmartAgent-MCP-Client", "version": "1.0.0"},
+            },
+            id="client-initialize",
+        ).to_dict()
+        resp = self._server.handle_request(req)
+        if not isinstance(resp, dict) or "error" in resp:
+            raise RuntimeError("MCP initialize failed")
+        result = resp.get("result")
+        if (not isinstance(result, dict) or result.get("protocolVersion") != "2024-11-05"
+                or not isinstance(result.get("serverInfo"), dict)
+                or not isinstance(result.get("capabilities"), dict)
+                or not isinstance(result.get("capabilities", {}).get("tools"), dict)):
+            raise RuntimeError("MCP initialize returned an unsupported server response")
+        self._server.handle_request(JSONRPCRequest(method="notifications/initialized").to_dict())
+        self.server_info = result["serverInfo"]
+        self._initialized = True
+        return self.server_info
 
     def refresh_tools(self) -> List[ToolDefinition]:
         """向 MCP Server 请求最新的工具列表"""
+        self.initialize()
         req = JSONRPCRequest(method="tools/list", id="client-init-1").to_dict()
         resp_data = self._server.handle_request(req)
         if "error" in resp_data:
-            logger.error(f"Failed to list tools from MCP server: {resp_data['error']}")
+            logger.warning("Failed to list tools from MCP server")
             return []
 
         tools_raw = resp_data.get("result", {}).get("tools", [])
@@ -52,8 +83,9 @@ class MCPClient:
         """转换为通用大模型 function calling 的 tools 格式"""
         return [t.to_llm_tool() for t in self.get_tools()]
 
-    def call_tool(self, name: str, arguments: Dict[str, Any]) -> ToolCallResult:
+    def call_tool(self, name: str, arguments: Any) -> ToolCallResult:
         """通过 MCP 协议向服务端发起工具执行请求"""
+        self.initialize()
         req = JSONRPCRequest(
             method="tools/call",
             params={"name": name, "arguments": arguments},

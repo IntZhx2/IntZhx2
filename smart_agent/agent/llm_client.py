@@ -1,178 +1,95 @@
-"""
-大语言模型客户端 (LLM Client)
-强制通过 OpenAI 兼容接口标准连接云端真实大模型（如通义千问百炼、DeepSeek、智谱等），
-全面移除伪离线规则模式，保证智能体所有思考、规划与生成全部由真实大语言模型驱动。
-"""
-
+"""OpenAI-compatible model client. Configuration is not proof of connectivity."""
 import json
 import urllib.request
 import urllib.error
+from urllib.parse import urlsplit, urlunsplit
 from typing import Any, Dict, List, Optional
-import logging
 from smart_agent.config import API_BASE, API_KEY, DEFAULT_MODEL
-
-logger = logging.getLogger("agent.llm")
-
-# 常见模型代号别名与营销版本号映射字典
-MODEL_ALIASES = {
-    "deepseek-v4.1-flash": "deepseek-flash",
-    "deepseek-v4-flash": "deepseek-flash",
-    "deepseek-v4.1": "deepseek-flash",
-    "deepseek-v4.1-pro": "deepseek-v4-pro",
-    "deepseek-v4-pro": "deepseek-v4-pro",
-}
 
 
 def normalize_model_name(model_name: str) -> str:
-    """自动纠正常见模型代号别名与营销版本号（如 deepseek-v4.1-flash -> deepseek-flash）"""
-    m = (model_name or "").strip()
-    lower = m.lower()
-    if lower in MODEL_ALIASES:
-        return MODEL_ALIASES[lower]
-    if "deepseek" in lower and "4.1" in lower and "flash" in lower:
-        return "deepseek-flash"
-    if "deepseek" in lower and "4.1" in lower and "pro" in lower:
-        return "deepseek-v4-pro"
-    return m
+    """Model identifiers are supplied by the provider; never guess replacements."""
+    return (model_name or "").strip()
+
+
+def validate_api_base(value: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("模型 API 地址不能为空")
+    parsed = urlsplit(value.strip())
+    if (not parsed.hostname or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment):
+        raise ValueError("模型地址不能包含用户名、密码、查询参数或片段")
+    local = parsed.hostname.lower() in {"localhost", "127.0.0.1", "::1"}
+    if parsed.scheme != "https" and not (local and parsed.scheme == "http"):
+        raise ValueError("远程模型地址必须使用 HTTPS；HTTP 仅允许本机回环地址")
+    try:
+        parsed.port
+    except ValueError as exc:
+        raise ValueError("模型端口无效") from exc
+    path = parsed.path.rstrip("/")
+    if path.endswith("/chat/completions"):
+        path = path[:-len("/chat/completions")]
+    if not path:
+        path = "/v1"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward credentials to a redirected host.
+        return None
 
 
 class LLMClient:
-    """真实在线大语言模型客户端"""
-
-    def __init__(
-        self,
-        api_base: str = API_BASE,
-        api_key: str = API_KEY,
-        model: str = DEFAULT_MODEL,
-    ):
+    def __init__(self, api_base: str = API_BASE, api_key: str = API_KEY,
+                 model: str = DEFAULT_MODEL):
         self.api_base = api_base.strip()
         self.api_key = api_key.strip()
         self.model = normalize_model_name(model)
 
     @property
     def normalized_api_base(self) -> str:
-        """规范化 API 端点 URL，自动去除末尾斜杠并在缺失时补充 /v1"""
-        base = self.api_base.rstrip("/")
-        if base.endswith("/chat/completions"):
-            return base[:-17]
-        # 如果是本地或第三方域名但没有 /v1 且没有 /v1beta，自动规范化补齐 /v1
-        if not (base.endswith("/v1") or base.endswith("/v1beta") or "/v1/" in base):
-            return f"{base}/v1"
-        return base
+        return validate_api_base(self.api_base)
 
     def has_valid_key(self) -> bool:
-        """检查是否已配置有效格式的 API Key"""
+        """Only checks that a key is configured; remote authentication is separate."""
         return bool(self.api_key and len(self.api_key) >= 5)
 
-    def chat_completion(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """向云端大模型 API 发送对话与工具规划请求（强制要求 API KEY）"""
+    def chat_completion(self, messages: List[Dict[str, Any]],
+                        tools: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         if not self.has_valid_key():
-            raise RuntimeError(
-                "【未配置大模型 API Key】当前系统已关闭伪离线模式，必须接入真实大模型 API！"
-                "请点击右上角【⚙️ API 设置】填入您的 API Key（支持本地 CPA、阿里云百炼、DeepSeek等）。"
-            )
-
-        logger.info(f"正在向云端大模型发送请求: Model={self.model}, Endpoint={self.normalized_api_base}")
+            raise RuntimeError("未配置大模型 API Key，请在 API 设置或环境变量中配置")
         return self._call_remote_api(messages, tools)
 
-    def _call_remote_api(
-        self,
-        messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-    ) -> Dict[str, Any]:
-        """使用标准 HTTP POST 调用大模型兼容接口"""
-        url = f"{self.normalized_api_base}/chat/completions"
-        payload: Dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.6,
-        }
+    def _call_remote_api(self, messages, tools=None):
+        url = self.normalized_api_base + "/chat/completions"
+        payload = {"model": self.model, "messages": messages, "temperature": 0.6}
         if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-
-        data = json.dumps(payload).encode("utf-8")
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}",
-            "User-Agent": "SmartAgent-Travel/1.0",
-        }
-
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+            payload.update(tools=tools, tool_choice="auto")
+        request = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json", "Authorization": "Bearer " + self.api_key},
+            method="POST")
+        handlers = [_NoRedirect()]
+        if urlsplit(url).hostname in {"127.0.0.1", "localhost", "::1"}:
+            handlers.append(urllib.request.ProxyHandler({}))
+        opener = urllib.request.build_opener(*handlers)
         try:
-            # 若连接本地端点 (127.0.0.1 或 localhost)，强制禁用代理直连，防止被外部代理软件拦截
-            if "127.0.0.1" in url or "localhost" in url:
-                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-                resp_ctx = opener.open(req, timeout=45.0)
-            else:
-                resp_ctx = urllib.request.urlopen(req, timeout=45.0)
-
-            with resp_ctx as resp:
-                resp_body = resp.read().decode("utf-8")
-                result = json.loads(resp_body)
-                if "choices" not in result or not result["choices"]:
-                    raise RuntimeError(f"大模型响应格式异常: {resp_body[:300]}")
-                choice = result["choices"][0]["message"]
-                return choice
-        except urllib.error.HTTPError as he:
-            err_msg = he.read().decode("utf-8", errors="ignore")
-            logger.error(f"云端大模型接口报错 HTTP {he.code}: {err_msg}")
-            if "Direct IP access is not allowed" in err_msg:
-                raise RuntimeError(
-                    "系统检测到本地代理软件拦截了 127.0.0.1 本地通信 (Direct IP access is not allowed)！\n"
-                    "已自动启用直连白名单。请确认当前后台服务或 CPA 是否正常运行于 127.0.0.1:8317。"
-                )
-            elif he.code == 401:
-                raise RuntimeError(
-                    "API Key 鉴权失败 (401 Unauthorized)！请检查填写的 API Key 是否正确。"
-                    "若使用本地 CPA 代理，默认访问密钥通常为 123456。"
-                )
-            elif he.code == 404:
-                raise RuntimeError(
-                    f"大模型服务端点未找到 (404 Not Found)！请求路径为: {url}。"
-                    "若使用本地 CPA 代理，请确保 API 端点为 http://127.0.0.1:8317/v1。"
-                )
-            elif he.code == 400 and ("The supported API model names are" in err_msg or "deepseek-flash" in err_msg):
-                # 针对 DeepSeek 官方或反代要求 deepseek-flash 代号的场景，自动修正并热重试
-                logger.warning("大模型服务端要求使用 deepseek-flash 代号，正在自动重试...")
-                self.model = "deepseek-flash"
-                payload["model"] = "deepseek-flash"
-                data = json.dumps(payload).encode("utf-8")
-                req_retry = urllib.request.Request(url, data=data, headers=headers, method="POST")
-                try:
-                    with urllib.request.urlopen(req_retry, timeout=45.0) as retry_resp:
-                        retry_body = retry_resp.read().decode("utf-8")
-                        retry_res = json.loads(retry_body)
-                        if "choices" in retry_res and retry_res["choices"]:
-                            return retry_res["choices"][0]["message"]
-                except Exception as retry_err:
-                    logger.warning(f"热重试 deepseek-flash 失败: {retry_err}")
-                raise RuntimeError(
-                    f"模型代号格式错误 (HTTP 400): 服务端仅支持 'deepseek-flash' 或 'deepseek-v4-pro'，请在【⚙️ API 设置】中将模型名称调整为 deepseek-flash！"
-                )
-            elif he.code == 400 and ("unknown provider" in err_msg or "model_not_found" in err_msg):
-                raise RuntimeError(
-                    f"模型名称未匹配 (HTTP 400): 服务端未找到模型 '{self.model}'。"
-                    "当前本地 CPA 绑定的 Google Gemini 模型名称通常为 gemini-3.5-flash-lite 或 gemini-3.8-flash-high，请在【⚙️ API 设置】中修改模型名称！"
-                )
-            elif "User location is not supported" in err_msg or "FAILED_PRECONDITION" in err_msg:
-                raise RuntimeError(
-                    "Google Gemini API 提示地区受限 (User location is not supported)！\n"
-                    "原因分析：CPA 依赖科学上网代理（通常需在后台开启 Clash 并监听 7890 端口）。\n"
-                    "👉 解决方案：\n"
-                    "1. 请开启您的科学上网软件（确保代理可用且节点在港/美/日/新等支持地区）；\n"
-                    "2. 或直接点击右上角【⚙️ API 设置】，一键切换为国内免翻墙的真实服务商（如阿里云百炼 Qwen 或 DeepSeek）。"
-                )
-            elif he.code == 429:
-                raise RuntimeError("大模型调用超出额度限制 (429 Too Many Requests / Quota Exceeded)！请检查账户余额。")
-            raise RuntimeError(f"大模型服务返回错误 (HTTP {he.code}): {err_msg[:250]}")
-        except urllib.error.URLError as ue:
-            logger.error(f"网络连接失败: {ue.reason}")
-            raise RuntimeError(f"无法连接至大模型服务端点 ({self.normalized_api_base})，请检查网络或 CPA 代理是否在运行: {ue.reason}")
-        except Exception as e:
-            logger.error(f"请求发生未知异常: {e}")
-            raise RuntimeError(f"大模型服务请求异常: {str(e)}")
+            with opener.open(request, timeout=45) as response:
+                raw = response.read(4 * 1024 * 1024 + 1)
+            if len(raw) > 4 * 1024 * 1024:
+                raise RuntimeError("模型响应过大")
+            body = json.loads(raw)
+            message = body["choices"][0]["message"]
+            if not isinstance(message, dict):
+                raise ValueError("invalid message")
+            return message
+        except urllib.error.HTTPError as exc:
+            explanations = {401: "鉴权失败，请检查 API Key", 403: "服务拒绝访问",
+                404: "接口或模型不存在，请检查服务商文档", 429: "服务限流或额度不足"}
+            # Provider bodies may contain credentials or user input: do not echo them.
+            raise RuntimeError("模型调用失败：HTTP %s，%s" % (
+                exc.code, explanations.get(exc.code, "请检查模型服务状态"))) from None
+        except (urllib.error.URLError, TimeoutError, OSError):
+            raise RuntimeError("无法连接模型服务，请检查地址和网络") from None
+        except (ValueError, KeyError, IndexError, TypeError):
+            raise RuntimeError("模型响应不符合 Chat Completions 格式") from None

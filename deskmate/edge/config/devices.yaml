@@ -1,0 +1,35 @@
+# DeskMate Edge - 物理设备与逻辑名映射表
+# 业务代码与智能体只使用逻辑名称，真实 entity_id 统一在此维护
+
+lamp:
+  entity_id: "light.yeelink_cn_313523278_lamp4_s_2_light"
+  model: "yeelink.light.lamp4"
+  name: "米家台灯 1S"
+  color_temp_min: 2600
+  color_temp_max: 5000
+
+plug:
+  entity_id: "switch.cuco_cn_945537660_v3_on_p_2_1"
+  power_entity_id: "sensor.cuco_cn_945537660_v3_electric_power_p_11_2"
+  model: "cuco.plug.v3"
+  name: "米家智能插座 3"
+
+motion:
+  entity_id: "event.lumi_cn_blt_3_17rvrv1hoeg00_bmgl01_motion_detected_e_2_1"
+  illumination_entity_id: "sensor.lumi_cn_blt_3_17rvrv1hoeg00_bmgl01_illumination_degree_p_2_1"
+  model: "lumi.motion.bmgl01"
+  name: "小米人体传感器 2"
+
+climate:
+  temperature_entity_id: "sensor.miaomiaoc_cn_blt_3_1f1nk3kg4k800_t9_temperature_p_3_1001"
+  model: "miaomiaoce.sensor_ht.t9"
+  name: "米家智能温湿度计 3"
+
+speaker:
+  entity_id: "media_player.xiaomi_cn_567257618_l05c"
+  tts_notify_entity: "notify.xiaomi_cn_567257618_l05c_play_text_a_5_3"
+  directive_notify_entity: "notify.xiaomi_cn_567257618_l05c_execute_text_directive_a_5_4"
+  device_id: "f91bfdb1-8b3a-427b-8a47-ce85269c6ca1"
+  model: "xiaomi.wifispeaker.l05c"
+  hardware: "L05C"
+  name: "小爱音箱 Play 增强版"

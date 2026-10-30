@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deskmate-edge"
+version = "0.2.0"
+description = "DeskMate Windows Edge Agent & Hardware Controller"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "Zhao Haixiang", email = "2973373761@qq.com" }
+]
+dependencies = [
+    "websockets>=12.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.6.0",
+    "pydantic-settings>=2.2.0",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.0",
+    "psutil>=5.9.8",
+    "pynput>=1.7.6",
+    "mss>=9.0.1",
+    "Pillow>=10.2.0",
+    "pyperclip>=1.8.2",
+    "pywin32>=306; platform_system=='Windows'",
+    "pycaw>=20240209; platform_system=='Windows'",
+    "miservice>=2.4.8"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["deskmate_edge*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

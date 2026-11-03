@@ -1,0 +1,7 @@
+.env
+data/
+.coverage
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+.runtime/

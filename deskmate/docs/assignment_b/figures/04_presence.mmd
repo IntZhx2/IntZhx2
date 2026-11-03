@@ -1,0 +1,15 @@
+stateDiagram-v2
+    [*] --> present
+    present --> away: 锁屏立即 或无移动且键鼠空闲达三分钟
+    away --> sleep: 暂停计时 台灯百分之十 2500K
+    sleep --> powered_off: 确认离座后满十五分钟 关灯及插座
+    powered_off --> ac_off: 确认离座后满三十分钟 关空调
+    away --> present: 未锁屏且移动或键鼠活动恢复
+    sleep --> present: 回座恢复灯光 插座和计时
+    powered_off --> present: 回座恢复灯光 插座和计时
+    ac_off --> present: 回座恢复灯光 插座和计时
+    note right of away
+        阈值来自 Settings 可即时修改
+        动作失败下一轮重试
+        空调状态只表示最后指令
+    end note

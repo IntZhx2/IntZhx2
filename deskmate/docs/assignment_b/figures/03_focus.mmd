@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> idle
+    idle --> focusing: 启动工作台或专注
+    focusing --> paused: 锁屏或确认离座
+    short_break --> paused: 离座 保存原阶段
+    paused --> focusing: 回座且原阶段为专注
+    paused --> short_break: 回座且原阶段为休息
+    focusing --> focusing: 到点 C 接口同意顺延 且未达两次
+    focusing --> short_break: 到点不顺延 或 C 返回强休息动作
+    short_break --> focusing: 休息结束或跳过
+    focusing --> idle: 用户结束
+    short_break --> idle: 用户结束
+    paused --> idle: 用户结束
+    note right of paused
+        服务重启也恢复为暂停
+        只统计实际专注秒数
+    end note

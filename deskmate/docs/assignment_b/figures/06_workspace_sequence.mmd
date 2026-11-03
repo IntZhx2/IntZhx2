@@ -1,0 +1,24 @@
+sequenceDiagram
+    participant U as 用户
+    participant R as 语音路由
+    participant O as 协调者
+    participant W as 工作台执行器
+    participant E as EdgeHub
+    participant S as 专注会话与数据库
+    U->>R: 帮我准备软工工作台
+    R->>O: 未命中快速路径
+    O->>W: start_work 工作台和时长
+    par 环境分支
+        W->>E: lamp_set 专注灯光
+        opt 室温达到27.5且设置auto
+            W->>E: ac_set 制冷26度
+        end
+    and 电脑分支
+        W->>E: open_folder 和 open_url 和 open_app
+        E-->>W: 每项独立结果
+        W->>E: arrange_windows
+    end
+    W->>S: 新建 FocusSession 和计时检查点
+    W-->>O: 分支状态和耗时 含部分失败
+    O->>E: speaker_tts 六十字以内
+    O-->>U: SSE 轨迹及完整结果

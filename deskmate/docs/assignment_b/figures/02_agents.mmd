@@ -1,0 +1,13 @@
+flowchart TB
+    I[语音或网页文本] --> R{确认窗口及快速路径正则}
+    R -->|命中| F[确定性控制 无需模型]
+    R -->|未命中| O[协调者 Function Calling]
+    O -->|环境任务| ENV[环境 Agent 快速模型]
+    O -->|电脑任务| PC[电脑 Agent 最多六步]
+    O -->|准备工作台| WS[确定性执行器 环境与电脑并行]
+    ENV --> H[工具白名单 参数校验 EdgeHub]
+    PC --> H
+    WS --> H
+    F --> H
+    H --> REAL[真实 Edge 工具 RPC]
+    H --> V[独立 VirtualEdge]

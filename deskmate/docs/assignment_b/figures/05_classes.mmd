@@ -1,0 +1,67 @@
+classDiagram
+    class User {
+        int id
+        str username
+        str password_hash
+        bool is_demo
+    }
+    class UserSettings {
+        int user_id
+        json values
+    }
+    class WorkspaceProfile {
+        int id
+        int user_id
+        str name
+        list aliases
+        int focus_minutes
+        json lamp
+        json ac
+        list items
+        str layout
+    }
+    class FocusSession {
+        int id
+        int user_id
+        int workspace_id
+        str started_at
+        str ended_at
+        int focus_seconds
+        int pause_count
+        int flow_extensions
+    }
+    class FocusCheckpoint {
+        int user_id
+        json state
+    }
+    class VoiceLog {
+        int id
+        int user_id
+        str at
+        str route
+        json trace
+        str reply
+        int latency_ms
+        bool ok
+    }
+    class Runtime {
+        StateStore store
+        EdgeHub edge
+        FocusEngine focus
+        PresenceEngine presence
+    }
+    class IWellbeingEngine {
+        <<interface>>
+        on_minute_stats()
+        check_flow_extension()
+        on_user_left()
+        generate_daily_report()
+    }
+    User "1" --> "1" UserSettings
+    User "1" --> "many" WorkspaceProfile
+    User "1" --> "many" FocusSession
+    User "1" --> "many" VoiceLog
+    User "1" --> "1" FocusCheckpoint
+    WorkspaceProfile "0..1" --> "many" FocusSession
+    User "1" --> "1" Runtime
+    Runtime ..> IWellbeingEngine : C 实现并注入

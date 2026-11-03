@@ -1,0 +1,11 @@
+flowchart TB
+    W[浏览器控制台 C] <-->|HTTPS WSS SSE| N[Nginx 反向代理 B]
+    E[现场 Edge A 设备语音和电脑工具] <-->|主动外连 WSS| API[FastAPI 和双端 Hub B]
+    N <--> API
+    API --> O[协调者及环境电脑 Agent B]
+    API --> S[状态 在座规则 专注时钟 B]
+    O --> V[VirtualEdge 独立演示环境 B]
+    O <--> L[外部文本及多模态模型]
+    O --> DB[(SQLModel 和 SQLite)]
+    S --> DB
+    S -.内部接口.-> C[健康算法及报告 C 待接入]

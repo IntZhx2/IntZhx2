@@ -37,10 +37,15 @@
 
 ## 2. 工程实现阶段任务（Sprint 1 ~ Sprint 3）
 
-### C-10 前端工程脚手架搭建与状态同步中心 ⬜（P0，Sprint 1）
+### C-10 前端工程脚手架搭建与状态同步中心 ✅（P0，Sprint 1）
 - 初始化 Vue 3 + Vite + TypeScript 项目，引入 Element Plus 与 ECharts；
 - 编写 `frontend/src/types/contracts.ts`，严格按照 `docs/CONTRACTS.md` 定义 TypeScript 类型接口；
 - 建立 WebSocket 客户端：支持断网指数退避自动重连，连接后接收 `state.snapshot`，节流合并 `state.patch`。
+
+**实际实现说明（2026-11-06，C-10）**
+- `frontend/` 已建立 Vue 3/Vite/TypeScript strict/Pinia/Element Plus/ECharts 工程；类型集中于 `src/types/contracts.ts`，遵守 v2 snake_case。
+- `lib/realtime.ts` 实现快照、100ms 客户端增量合并、20s 心跳、60s 超时和指数退避，重连不重放设备指令；`stores/app.ts` 管理登录和跨账号状态清理。
+- 交付 `pnpm-lock.yaml`、构建产物生成流程及 Vitest 测试；实际验证与五分钟步骤见 `frontend/docs/VALIDATION.md`。
 
 ### C-11 Wellbeing 疲劳判定与心流保护引擎（场景 3 核心算法） ⬜（P0，Sprint 1~2）
 - **实现文件**：`backend/app/wellbeing/engine.py`、`baseline.py`、`fatigue.py`、`flow.py`（严格实现 CONTRACTS §8 `IWellbeingEngine` 接口）
@@ -54,28 +59,76 @@
     - **L3 强制休息建议**：达到 75 分时触发休息遮罩与提示；
   - **智能心流保护机制**：当番茄钟倒计时结束时，若系统检测到用户最近 10 分钟活跃度处于基线 110% 以上，自动触发顺延 10 分钟，保护灵感不被打断。
 
-### C-12 现代极简 Web 实时监控面板 ⬜（P0，Sprint 1~2）
+### C-12 现代极简 Web 实时监控面板 🟡（P0，Sprint 1~2）
 - **实现文件**：`frontend/src/views/Dashboard.vue`
   - **工位设备看板**：台灯亮度色温滑块实时调控、空调红外设定温度与运行模式、智能插座开关；
   - **专注时钟与心流徽章**：大圆环番茄钟倒计时，心流自动顺延状态高亮；
   - **工作节奏时序图（ECharts）**：可视化绘制每分钟活动节奏曲线与个人基准线的对比，实时反映打字波峰与发呆波谷；
   - **环境指标与疲劳健康度仪表盘**：直观展示工位温湿度与当前综合疲劳指数。
 
-### C-13 网页端人机对话与智能体协同可视化视图 ⬜（P0，Sprint 2）
+**实际实现说明（2026-11-06，C-12）**
+- `frontend/src/views/Dashboard.vue` 已实现专注倒计时、设备控制、空调推测态、在线/在座指标、环境卡、实时活动率图和通知。
+- 新增 `Workspaces.vue` 实现工作台 CRUD，`Settings.vue` 对接配置保存，完成桌面与手机布局。
+- 灯光、工作台、专注与锁屏链路已用现有后端联调；健康模块未安装，疲劳/心流与个人基线不冒充已可用，因此保留 🟡。
+
+### C-13 网页端人机对话与智能体协同可视化视图 ✅（P0，Sprint 2）
 - **实现文件**：`frontend/src/views/Chat.vue`
   - 对接 `/api/chat` SSE 流式接口，支持 Markdown 渲染与代码高亮展示；
   - **协同轨迹折叠卡片**：清晰展示“协调者 Agent”如何分解任务并调用“电脑 Agent”或“环境 Agent”的执行轨迹；
   - **右侧抽屉式结果展示区**：展示声控助手返回的代码片段、网页搜索汇总与报错分析图文；
   - 浏览器原生 Web Speech API 语音录入支持，作为无物理音箱环境下的交互补充。
 
-### C-14 线上演示控制台与虚拟调试沙盒 ⬜（P0，Sprint 2）
+**实际实现说明（2026-11-06，C-13）**
+- `frontend/src/views/Chat.vue`、`stores/chat.ts`、`lib/sse.ts` 实现 POST SSE、跨块中文、工具轨迹、停止等待、对话导出及错误恢复。
+- `components/Markdown.vue` 用 marked + DOMPurify + highlight.js 安全渲染；`assist.result` 在结果抽屉显示；浏览器支持时提供语音输入，识别后仍由用户确认发送。
+- 真实后端快速口令已在浏览器确认，受控流验证工具轨迹、业务失败和缺少 done 的中断；真实模型质量与麦克风权限链路仍需有凭据/设备时联验。
+
+### C-14 线上演示控制台与虚拟调试沙盒 🟡（P0，Sprint 2）
 - **实现文件**：`frontend/src/views/Demo.vue`
   - 专为答辩和线上验收设计的体验控制中心；
   - 提供**一键模拟开关**：模拟有人坐下、离开工位、键盘飞速输入（模拟心流）、键盘敲击暴跌（模拟疲劳）、调节室内温度至 29℃ 等；
   - 界面提供场景体验步骤引导：“体验 1：一键进入软工工作台 → 体验 2：调低打字速率触发小爱关心 → 体验 3：查看今日复盘报告”。
 
-### C-15 每日工作/学习 AI 复盘报告页 ⬜（P0，Sprint 2~3）
+**实际实现说明（2026-11-06，C-14）**
+- `frontend/src/views/Demo.vue` 已实现 demo 账号限制、三步引导、在座/离座/锁屏/解锁、活动率与温度注入、语音文本注入。
+- 真正连接 B 的 VirtualEdge；与纯前端预览模式明确区分。浏览器实测锁屏后专注暂停，解锁恢复。
+- 健康升级与心流需要 C-11 引擎，第三步完整 AI 复盘需要 C-15 服务，三场景全链路尚不能验收，保留 🟡。
+
+### C-15 每日工作/学习 AI 复盘报告页 🟡（P0，Sprint 2~3）
 - **实现文件**：`frontend/src/views/Reports.vue` 与 `backend/app/wellbeing/report.py`
   - 聚合当日总专注时长、番茄钟完成数、心流延长次数、疲劳出现时段分布与平均温湿度；
   - 调用大模型生成“今日学习状态点评与明日建议”（≤ 300 字，鼓励风格）；
   - 提供日历切换与导出分享功能。
+
+
+**实际实现说明（2026-11-06，C-15）**
+- `frontend/src/views/Reports.vue` 完成日期切换、会话统计、三张健康/环境图表容器、AI 点评展示与 Markdown 导出；缺数据时给出空态，不画虚构曲线。
+- 真实会话统计来自 `/api/focus/sessions`；日报与时序 503 时仍可查看真实专注数据，已在浏览器验证。
+- 本轮仅实现前端，`backend/app/wellbeing/report.py`、报告路由及统计口径仍未交付，不能把整项标记完成。
+
+## 三 五分钟手动复现（前端）
+
+前提：Node.js 与依赖已准备好，真实联调时后端已按其 README 启动。
+1. `cd frontend && pnpm dev`，打开终端显示的本地地址；点击「体验界面预览」，依次检查六个页面与示例标记。
+2. 工作台编辑名称和启动项后保存；回首页调整灯光、空调，确认本地示例响应；退出会丢弃示例修改。
+3. 使用管理员提供的 demo 密码登录。首页开始 1 分钟专注，进入沙盒锁屏/解锁，回首页确认暂停/恢复。
+4. 对话发送「空调调到25度」，回首页确认 25℃；复盘页确认会话统计和健康服务未接入提示。
+5. `pnpm test && pnpm build` 复现 25 项测试和严格类型/生产构建。完整证据见 `frontend/docs/VALIDATION.md`。
+
+## 四 跨组请求与当前边界
+
+- 给 B：前端按原 CONTRACTS v2 对接，未改后端/edge/deploy。部署需挂载 `frontend/dist`，反代同源 `/api` 与 `/ws`，并验证 SSE 不缓冲。
+- 给 C 健康模块：需完成 C-11 与 C-15 后端；明确个人基线如何推送、DailyReport.stats 字段、跨日会话分日口径。现行 §8 没有 PRD 引用的 §8.3 公式细则，需共同确认后按流程升级契约。
+- 给 B：本地独立联调中观察到 Uvicorn 默认 WebSocket 连接日志记录带 query JWT 的 URL，部署日志需脱敏；前端没有打印令牌，本轮未跨目录改动日志配置。
+- 本轮用户要求前端分析、设计与实现。问卷、PPT、Figma/XMind、博客发布及 C-11 未在本轮完成；代码界面原型、SVG 标志和设计说明可用于后续作业材料，但不能视为那些交付项已验收。
+- 补充运行依赖：marked/DOMPurify/highlight.js 用于 Markdown、安全清理和代码高亮；Prettier/jsdom 仅用于开发与测试。没有引入额外应用框架。
+
+
+## 五 第二版前端与在线 Demo（2026-11-06）
+
+- 按 `frontend/docs/TASTE_REVIEW.md` 重写首页信息层级、业务文案和全站视觉规范，增加最近执行确认；手机首屏增加设备快捷操作及带文字的导航。
+- 增加 `VITE_DEMO_ONLY` 静态演示构建；示例助手按规则实际修改本页设备和专注状态，明确没有调用模型或操作 Windows。
+- 自动化更新为 29 项通过，正常/演示生产构建均通过；首页检查 1440/1024/768/390px，真实交互检查记录见 `frontend/docs/V2_DELIVERY.md`。
+- 用户已授权上传 Demo，本次部署前端静态示例。此交付不将 C-11、真实健康报告或公网真实硬件联动标记完成。
+
+- Demo 已通过 Sites 发布（私有拥有者访问）：https://deskmate-workspace-v2.airy-crow-7478.chatgpt.site 。原生部署状态 succeeded；线上自动浏览器需要登录，未将该状态写为线上完整交互验收。
